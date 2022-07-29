@@ -7,8 +7,8 @@ def test_comments_attr_in_nodes():
     """Comment in the node attributes"""
     source = """hello = 'hello'"""
     tree = astcom.parse(source)
-    for node in tree.body:
-        assert hasattr(node, "comments")
+    node = tree.body[0]
+    assert hasattr(node, "comments")
 
 
 def test_inline():

@@ -1,6 +1,7 @@
 import ast
 import tokenize
-from typing import List, Protocol, Tuple
+from ast import *
+from typing import List, Protocol, Tuple, Union
 
 
 class stmt(ast.stmt):
@@ -15,16 +16,21 @@ def format_comment(comment_string: str):
     return comment_string.lstrip("# ")
 
 
-def parse(source, *args, **kwargs) -> AstNode:
+def parse(source: Union[str, bytes, AstNode], *args, **kwargs) -> AstNode:
+    if isinstance(source, AstNode):
+        return source
     tree = ast.parse(source, *args, **kwargs)
     for node in ast.walk(tree):
         if isinstance(node, ast.stmt):
+            node._fields += ("comments",)
             node.comments = ()  # type: ignore
-    enrich(source, tree)
+    _enrich(source, tree)
     return tree
 
 
-def enrich(source: str, tree: AstNode) -> None:
+def _enrich(source: Union[str, bytes], tree: AstNode) -> None:
+    if isinstance(source, bytes):
+        source = source.decode()
     lines_iter = iter(source.splitlines(keepends=True))
     tokens = tokenize.generate_tokens(lambda: next(lines_iter))
 
