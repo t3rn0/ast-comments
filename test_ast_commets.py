@@ -1,3 +1,4 @@
+import ast
 from textwrap import dedent
 
 import ast_comments as astcom
@@ -120,3 +121,22 @@ def test_comment_to_class():
     var_node, method_node = class_node.body
     assert var_node.comments == ("comment to 'Foo.var'",)
     assert method_node.comments == ("comment to method 'foo'",)
+
+
+def test_parse_again():
+    """We can parse AstNode objects."""
+    source = """hello = 'hello' # comment to hello"""
+    tree = astcom.parse(astcom.parse(source))
+    node = tree.body[0]
+    assert node.comments == ("comment to hello",)
+
+
+def test_parse_ast():
+    """We can parse ast.AST objects.
+    ast.AST object doesn't store comments values.
+    But at least returned stmt objects have comments attribute
+    """
+    source = """hello = 'hello' # comment to hello"""
+    tree = astcom.parse(ast.parse(source))
+    node = tree.body[0]
+    assert node.comments == ()
