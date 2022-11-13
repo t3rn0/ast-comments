@@ -36,12 +36,13 @@ def _enrich(source: Union[str, bytes], tree: AstNode) -> None:
     comment_tokens = sorted(
         (x.start[0], x) for x in tokens if x.type == tokenize.COMMENT
     )
-    nodes = sorted([(x.lineno, x) for x in ast.walk(tree) if isinstance(x, ast.stmt)])
-
+    nodes = sorted(
+        (x.lineno, x.col_offset, x) for x in ast.walk(tree) if isinstance(x, ast.stmt)
+    )
     i = j = 0
     while i < len(comment_tokens) and j < len(nodes):
         t_lineno, token = comment_tokens[i]
-        n_lineno, node = nodes[j]
+        n_lineno, _, node = nodes[j]
         if t_lineno <= n_lineno:
             node.comments += (format_comment(token.string),)
             i += 1

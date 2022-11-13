@@ -83,7 +83,7 @@ def test_unrelated_comment():
 
 
 def test_comment_to_function():
-    """Unrelated comment goes to nothing"""
+    """Comments to function and expression inside"""
     source = dedent(
         """
         # comment to function 'foo'
@@ -101,7 +101,7 @@ def test_comment_to_function():
 
 
 def test_comment_to_class():
-    """Unrelated comment goes to nothing"""
+    """Comments to class, its method and variable"""
     source = dedent(
         """
         # comment to class 'Foo'
@@ -140,3 +140,10 @@ def test_parse_ast():
     tree = astcom.parse(ast.parse(source))
     node = tree.body[0]
     assert node.comments == ()
+
+
+def test_multiple_statements_in_line():
+    """It's possible to parse multiple statements in one line"""
+    source = """hello = 'hello'; hello += ' world?'"""
+    tree = astcom.parse(source)
+    assert len(tree.body) == 2
