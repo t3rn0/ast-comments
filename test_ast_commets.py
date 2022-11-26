@@ -147,3 +147,11 @@ def test_multiple_statements_in_line():
     source = """hello = 'hello'; hello += ' world?'"""
     tree = astcom.parse(source)
     assert len(tree.body) == 2
+
+
+def test_comment_to_multiple_statements():
+    """Comment goes to every statement in line."""
+    source = """a=1; b=2 # hello"""
+    tree = astcom.parse(source)
+    for node in tree.body:
+        assert node.comments == ("hello",)
