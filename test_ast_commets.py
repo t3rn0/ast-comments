@@ -1,6 +1,5 @@
 import ast
 from textwrap import dedent
-
 import ast_comments as astcom
 
 
@@ -155,3 +154,64 @@ def test_comment_to_multiple_statements():
     tree = astcom.parse(source)
     for node in tree.body:
         assert node.comments == ("hello",)
+
+
+def test_docstring_to_class_and_method():
+    """Docstring to class and its method"""
+    source = dedent(
+        """
+        class Foo:
+            '''
+            docstring for "Foo"
+            '''
+
+            def foo(self):
+                '''
+                docstring for method "foo"
+                '''
+                ...
+        """
+    )
+    tree = astcom.parse(source)
+
+    class_node = tree.body[0]
+    method_node = class_node.body[1]
+
+    assert class_node.comments == ('docstring for "Foo"',)
+    assert method_node.comments == ('docstring for method "foo"',)
+
+
+def test_comments_and_docstring_method():
+    """Docstring and comments for a method"""
+    source = dedent(
+        """
+        #comment to foo function
+        def foo(): #comment 2 to foo function
+            '''
+            docstring for function "foo"
+            '''
+            ...
+        """
+    )
+    tree = astcom.parse(source)
+    function_node = tree.body[0]
+
+    assert function_node.comments == (
+        'docstring for function "foo"', 
+        'comment to foo function', 
+        'comment 2 to foo function'
+    )
+
+
+def test_docstring_module():
+    """Docstring for the module"""
+    source = dedent(
+        '''
+        """
+        docstring to module
+        """
+        '''
+    )
+
+    tree = astcom.parse(source)
+    assert tree.comments == ('docstring to module',)

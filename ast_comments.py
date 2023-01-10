@@ -19,7 +19,7 @@ def format_comment(comment_string: str):
 def parse(source: Union[str, bytes, ast.AST], *args, **kwargs) -> AstNode:
     tree = ast.parse(source, *args, **kwargs)
     for node in ast.walk(tree):
-        if isinstance(node, ast.stmt) and not hasattr(node, "comments"):
+        if isinstance(node, ast.stmt) or isinstance(node, ast.Module) and not hasattr(node, "comments"):
             node._fields += ("comments",)
             node.comments = ()
         if isinstance(node, (AsyncFunctionDef, FunctionDef, ClassDef, Module)):
