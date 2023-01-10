@@ -1,5 +1,5 @@
 import ast
-import tokenize
+from tokenize import generate_tokens, COMMENT
 from ast import *  # noqa: F401,F403
 from typing import List, Protocol, Tuple, Union
 
@@ -31,10 +31,10 @@ def _enrich(source: Union[str, bytes], tree: AstNode) -> None:
     if isinstance(source, bytes):
         source = source.decode()
     lines_iter = iter(source.splitlines(keepends=True))
-    tokens = tokenize.generate_tokens(lambda: next(lines_iter))
+    tokens = generate_tokens(lambda: next(lines_iter))
 
     comment_tokens = sorted(
-        (x.start[0], x) for x in tokens if x.type == tokenize.COMMENT
+        (x.start[0], x) for x in tokens if x.type == COMMENT
     )
 
     if not comment_tokens:
@@ -48,9 +48,15 @@ def _enrich(source: Union[str, bytes], tree: AstNode) -> None:
             nodes[node.lineno] = [node]
         else:
             nodes[node.lineno].append(node)
-
+ 
     node_lines = sorted(nodes)
 
+    docAbls = [nodes[node][0] for node in nodes if isinstance(nodes[node][0], (AsyncFunctionDef, FunctionDef, ClassDef, Module))]
+    for docAbl in docAbls:
+        docStr = ast.get_docstring(docAbl)
+        if docStr != None:
+            docAbl.comments += (docStr,)
+    
     i = j = 0
     while i < len(comment_tokens) and j < len(node_lines):
         t_lineno, token = comment_tokens[i]
