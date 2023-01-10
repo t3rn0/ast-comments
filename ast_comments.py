@@ -22,6 +22,10 @@ def parse(source: Union[str, bytes, ast.AST], *args, **kwargs) -> AstNode:
         if isinstance(node, ast.stmt) and not hasattr(node, "comments"):
             node._fields += ("comments",)
             node.comments = ()
+        if isinstance(node, (AsyncFunctionDef, FunctionDef, ClassDef, Module)):
+            docStr = ast.get_docstring(node)
+            if docStr != None:
+                node.comments += (docStr,)
     if isinstance(source, (str, bytes)):
         _enrich(source, tree)
     return tree
@@ -50,12 +54,6 @@ def _enrich(source: Union[str, bytes], tree: AstNode) -> None:
             nodes[node.lineno].append(node)
  
     node_lines = sorted(nodes)
-
-    docAbls = [nodes[node][0] for node in nodes if isinstance(nodes[node][0], (AsyncFunctionDef, FunctionDef, ClassDef, Module))]
-    for docAbl in docAbls:
-        docStr = ast.get_docstring(docAbl)
-        if docStr != None:
-            docAbl.comments += (docStr,)
     
     i = j = 0
     while i < len(comment_tokens) and j < len(node_lines):
