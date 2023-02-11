@@ -25,7 +25,6 @@ def test_single_comment_in_tree():
 
 
 def test_separate_line_single_line():
-    """Comment to the following line. Order in which nodes appears is preserved."""
     source = dedent(
         """
         # comment to hello
@@ -35,8 +34,7 @@ def test_separate_line_single_line():
     _test_unparse(source)
 
 
-def test_inline_comment_after_statement():
-    """Inlined comment goes before statement."""
+def test_inline_comment_before_statement():
     source = """hello = 'hello' # comment to hello"""
     _test_unparse(source)
 
@@ -159,6 +157,17 @@ def test_comments_to_try():
             print() # print comment
         finally:    # finally comment
             print() # print comment
+        """
+    )
+    _test_unparse(source)
+
+
+def test_comment_to_multiline_expr():
+    source = dedent(
+        """
+        if a:
+            (b if b >=
+                0 else 1)    # some comment
         """
     )
     _test_unparse(source)

@@ -27,7 +27,7 @@ def test_separate_line_single_line():
     assert isinstance(nodes[0], Comment)
 
 
-def test_inline_comment_after_statement():
+def test_inline_comment_before_statement():
     """Inlined comment goes before statement."""
     source = """hello = 'hello' # comment to hello"""
     nodes = parse(source).body
@@ -226,7 +226,7 @@ def test_comments_to_try():
     )
 
     nodes = parse(source).body
-    assert len(nodes) == 1  # FOR node
+    assert len(nodes) == 1  # TRY node
     body_nodes = nodes[0].body
     assert len(body_nodes) == 3
     assert isinstance(body_nodes[0], Comment)
@@ -253,3 +253,19 @@ def test_comments_to_try():
     assert isinstance(finalbody_nodes[0], Comment)
     assert isinstance(finalbody_nodes[1], Comment)
     assert isinstance(finalbody_nodes[2], ast.Expr)
+
+
+def test_comment_to_multiline_expr():
+    """Comment to multilined expr goes first."""
+    source = dedent(
+        """
+        if a:
+            (b if b >=
+                0 else 1)    # some comment
+        """
+    )
+    if_node = parse(source).body[0]
+    body_nodes = if_node.body
+    assert len(body_nodes) == 2
+    assert isinstance(body_nodes[0], Comment)
+    assert isinstance(body_nodes[1], ast.Expr)

@@ -2,6 +2,7 @@ import ast
 import sys
 import tokenize
 from ast import *  # noqa: F401,F403
+from collections.abc import Iterable
 from typing import Dict, List, Tuple, Union
 
 
@@ -71,7 +72,7 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
 
         attr = getattr(target_node, target_attr)
         attr.append(c_node)
-        attr.sort(key=lambda x: (x.lineno, not isinstance(x, Comment)))
+        attr.sort(key=lambda x: (x.end_lineno, not isinstance(x, Comment)))
 
 
 def _get_tree_intervals(
@@ -82,6 +83,8 @@ def _get_tree_intervals(
         attr_intervals = []
         for attr in _CONTAINER_ATTRS:
             if items := getattr(node, attr, None):
+                if not isinstance(items, Iterable):
+                    continue
                 attr_intervals.append((*_get_interval(items), attr))
         if attr_intervals:
             low = node.lineno if hasattr(node, "lineno") else min(attr_intervals)[0]
