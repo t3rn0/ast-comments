@@ -35,21 +35,5 @@ hello = 'hello'
 ```
 More examples can be found in test_parse.py and test_unparse.py.
 
-## Notes
-1. Right now it is assumed that there is no difference between inlined comments and regular. 
-All inlined comments become regular after the tree object is unparsed.
-
-2. Inlined comments for class- (def-, if-, ...) block shift "inside" body of the corresponding block:
-    ```
-    >>> source = """class Foo: # c1
-    ...     pass
-    ... """
-    >>> unparse(parse(source))
-    >>> print(unparse(parse(source)))
-    class Foo:
-        # c1
-        pass
-    ```
-
 ## Contributing
 You are welcome to open an issue or create a pull request
