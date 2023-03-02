@@ -171,3 +171,28 @@ def test_comment_to_multiline_expr():
         """
     )
     _test_unparse(source)
+
+
+def test_inline_comments_stay_inline():
+    source = dedent(
+        """
+        class Foo:  # c1
+            pass
+        """
+    )
+    _test_unparse(source)
+    unparsed_source = unparse(parse(source))
+    assert "class Foo:  # c1" in unparsed_source
+
+
+def test_comments_in_body():
+    source = dedent(
+        """
+        class Foo: 
+            # c1
+            pass
+        """
+    )
+    _test_unparse(source)
+    unparsed_source = unparse(parse(source))
+    assert "class Foo:\n    # c1" in unparsed_source

@@ -109,8 +109,31 @@ def _get_interval(items: List[ast.AST]) -> Tuple[int, int]:
 if sys.version_info >= (3, 9):
 
     class _Unparser(ast._Unparser):
+        def __init__(self) -> None:
+            self.inline_comments = []
+            super().__init__()
+
+        def traverse(self, node: "Union[ast.AST, list[ast.AST]]"):
+            if (
+                isinstance(node, ast.AST)
+                and hasattr(node, "body")
+                and isinstance(node.body, list)
+                and hasattr(node, "lineno")
+            ):
+                maybe_comment = node.body[0]
+                if (
+                    isinstance(maybe_comment, Comment)
+                    and maybe_comment.lineno == node.lineno
+                ):
+                    self.inline_comments.append(node.lineno)
+
+            super().traverse(node)
+
         def visit_Comment(self, node: "Comment"):
-            self.fill(node.value)
+            if node.lineno in self.inline_comments:
+                self.write(f"  {node.value}")
+            else:
+                self.fill(node.value)
 
     def unparse(ast_obj):
         return _Unparser().visit(ast_obj)
