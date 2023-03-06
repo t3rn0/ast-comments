@@ -109,8 +109,37 @@ def _get_interval(items: List[ast.AST]) -> Tuple[int, int]:
 if sys.version_info >= (3, 9):
 
     class _Unparser(ast._Unparser):
-        def visit_Comment(self, node: "Comment"):
+        def visit_Comment(self, node: Comment) -> None:
             self.fill(node.value)
 
-    def unparse(ast_obj):
+        def visit_If(self, node: ast.If) -> None:
+            def _get_first_not_comment_idx(orelse: list[ast.stmt]) -> int:
+                i = 0
+                while i < len(orelse) and isinstance(orelse[i], Comment):
+                    i += 1
+                return i
+
+            self.fill("if ")
+            self.traverse(node.test)
+            with self.block():
+                self.traverse(node.body)
+            # collapse nested ifs into equivalent elifs.
+            while node.orelse:
+                i = _get_first_not_comment_idx(node.orelse)
+                if len(node.orelse[i:]) != 1 or not isinstance(node.orelse[i], ast.If):
+                    break
+                for c_node in node.orelse[:i]:
+                    self.traverse(c_node)
+                node = node.orelse[i]
+                self.fill("elif ")
+                self.traverse(node.test)
+                with self.block():
+                    self.traverse(node.body)
+            # final else
+            if node.orelse:
+                self.fill("else")
+                with self.block():
+                    self.traverse(node.orelse)
+
+    def unparse(ast_obj: ast.AST) -> str:
         return _Unparser().visit(ast_obj)
