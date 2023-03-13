@@ -171,3 +171,25 @@ def test_comment_to_multiline_expr():
         """
     )
     _test_unparse(source)
+
+
+def test_nested_ifs_to_elifs():
+    """Collapse nested ifs to equivalent elifs."""
+    source = dedent(
+        """
+        # c1
+        if a > b:
+            print('bigger')
+        else:
+            # c2
+            if a == b:
+                print('equal')
+            # c3
+            else:
+                print('less')
+        """
+    )
+    r = unparse(parse(source))
+    assert r.count("if") == 2  # if and elif
+    assert r.count("elif") == 1
+    assert r.count("else") == 1
