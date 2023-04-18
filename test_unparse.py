@@ -93,7 +93,7 @@ def test_comment_to_class():
         """
         # comment to class 'Foo'
         class Foo:
-            var = "Foo var"    # comment to 'Foo.var'
+            var = "Foo var"  # comment to 'Foo.var'
 
             # comment to method 'foo'
             def foo(self):
@@ -134,10 +134,10 @@ def test_comments_to_for():
     """Comments to for/else blocks."""
     source = dedent(
         """
-        for i in range(10): # for comment
-            continue    # continue comment
-        else:   # else comment
-            pass    # pass comment
+        for i in range(10):  # for comment
+            continue  # continue comment
+        else:  # else comment
+            pass  # pass comment
         """
     )
     _test_unparse(source)
@@ -147,16 +147,16 @@ def test_comments_to_try():
     """Comments to try/except/else/finally blocks."""
     source = dedent(
         """
-        try:    # try comment
-            1 / 0   # expr comment
+        try:  # try comment
+            1 / 0  # expr comment
         except ValueError:  # except ValueError comment
-            pass    # pass comment
-        except KeyError:    # except KeyError
-            pass    # pass comment
-        else:   # else comment
-            print() # print comment
-        finally:    # finally comment
-            print() # print comment
+            pass  # pass comment
+        except KeyError:  # except KeyError
+            pass  # pass comment
+        else:  # else comment
+            print()  # print comment
+        finally:  # finally comment
+            print()  # print comment
         """
     )
     _test_unparse(source)
@@ -193,3 +193,23 @@ def test_nested_ifs_to_elifs():
     assert r.count("if") == 2  # if and elif
     assert r.count("elif") == 1
     assert r.count("else") == 1
+
+
+def test_inline_comment_stays_inline():
+    source = dedent(
+        """ 
+    # abc
+
+    class Foo:
+        pass
+        
+    class Bar:  # def
+        pass
+        
+    class FooBar:
+        # ghi
+        pass
+    """
+    )
+    _test_unparse(source)
+    assert source.strip("\n") == unparse(parse(source))
