@@ -25,7 +25,7 @@ The only difference is there is a new type of tree node: Comment
 >>> tree.body[0].value
 '# comment to hello'
 >>> dump(tree)
-"Module(body=[Comment(value='# comment to hello'), Assign(targets=[Name(id='hello', ctx=Store())], value=Constant(value='hello', kind=None), type_comment=None)], type_ignores=[])"
+"Module(body=[Assign(targets=[Name(id='hello', ctx=Store())], value=Constant(value='hello', kind=None), type_comment=None), Comment(value='# comment to hello', inline=True)], type_ignores=[])"
 ```
 If you have python3.9 or above it's also possible to unparse the tree object with its comments preserved.
 ```
@@ -34,22 +34,6 @@ If you have python3.9 or above it's also possible to unparse the tree object wit
 hello = 'hello'
 ```
 More examples can be found in test_parse.py and test_unparse.py.
-
-## Notes
-1. Right now it is assumed that there is no difference between inlined comments and regular. 
-All inlined comments become regular after the tree object is unparsed.
-
-2. Inlined comments for class- (def-, if-, ...) block shift "inside" body of the corresponding block:
-    ```
-    >>> source = """class Foo: # c1
-    ...     pass
-    ... """
-    >>> unparse(parse(source))
-    >>> print(unparse(parse(source)))
-    class Foo:
-        # c1
-        pass
-    ```
 
 ## Contributing
 You are welcome to open an issue or create a pull request

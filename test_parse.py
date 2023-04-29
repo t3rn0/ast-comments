@@ -12,6 +12,7 @@ def test_single_comment_in_tree():
     nodes = parse(source).body
     assert len(nodes) == 1
     assert isinstance(nodes[0], Comment)
+    assert not nodes[0].inline
 
 
 def test_separate_line_single_line():
@@ -25,14 +26,16 @@ def test_separate_line_single_line():
     nodes = parse(source).body
     assert len(nodes) == 2
     assert isinstance(nodes[0], Comment)
+    assert not nodes[0].inline
 
 
-def test_inline_comment_before_statement():
-    """Inlined comment goes before statement."""
+def test_inline_comment_after_statement():
+    """Inlined comment goes after statement."""
     source = """hello = 'hello' # comment to hello"""
     nodes = parse(source).body
     assert len(nodes) == 2
-    assert isinstance(nodes[0], Comment)
+    assert isinstance(nodes[1], Comment)
+    assert nodes[1].inline
 
 
 def test_separate_line_multiline():
@@ -50,6 +53,8 @@ def test_separate_line_multiline():
     assert isinstance(nodes[1], Comment)
     assert nodes[0].value == "# comment to hello 1"
     assert nodes[1].value == "# comment to hello 2"
+    assert not nodes[0].inline
+    assert not nodes[1].inline
 
 
 def test_multiline_and_inline_combined():
@@ -64,8 +69,11 @@ def test_multiline_and_inline_combined():
     )
     nodes = parse(source).body
     assert nodes[0].value == "# comment to hello 1"
+    assert not nodes[0].inline
     assert nodes[1].value == "# comment to hello 2"
-    assert nodes[2].value == "# comment to hello 3"
+    assert not nodes[1].inline
+    assert nodes[3].value == "# comment to hello 3"
+    assert nodes[3].inline
 
 
 def test_unrelated_comment():
@@ -79,6 +87,7 @@ def test_unrelated_comment():
     nodes = parse(source).body
     assert len(nodes) == 2
     assert isinstance(nodes[1], Comment)
+    assert not nodes[1].inline
 
 
 def test_comment_to_function():
@@ -93,8 +102,10 @@ def test_comment_to_function():
     nodes = parse(source).body
     assert len(nodes) == 2
     assert nodes[0].value == "# comment to function 'foo'"
+    assert not nodes[0].inline
     function_node = nodes[1]
-    assert function_node.body[0].value == "# comment to print"
+    assert function_node.body[1].value == "# comment to print"
+    assert function_node.body[1].inline
 
 
 def test_comment_to_class():
@@ -114,10 +125,13 @@ def test_comment_to_class():
 
     assert len(nodes) == 2
     assert nodes[0].value == "# comment to class 'Foo'"
+    assert not nodes[0].inline
     class_body = nodes[1].body
-    assert isinstance(class_body[0], Comment)
-    assert isinstance(class_body[1], ast.Assign)
+    assert isinstance(class_body[0], ast.Assign)
+    assert isinstance(class_body[1], Comment)
+    assert class_body[1].inline
     assert isinstance(class_body[2], Comment)
+    assert not class_body[2].inline
     assert isinstance(class_body[3], ast.FunctionDef)
 
 
@@ -125,7 +139,8 @@ def test_parse_again():
     """We can parse AstNode objects."""
     source = """hello = 'hello' # comment to hello"""
     nodes = parse(parse(source)).body
-    assert isinstance(nodes[0], Comment)
+    assert isinstance(nodes[1], Comment)
+    assert nodes[1].inline
 
 
 def test_parse_ast():
@@ -142,13 +157,14 @@ def test_multiple_statements_in_line():
 
 
 def test_comment_to_multiple_statements():
-    """Comment goes before statements."""
+    """Comment goes behind statements."""
     source = """a=1; b=2 # hello"""
     nodes = parse(source).body
     assert len(nodes) == 3
-    assert isinstance(nodes[0], Comment)
+    assert isinstance(nodes[0], ast.Assign)
     assert isinstance(nodes[1], ast.Assign)
-    assert isinstance(nodes[2], ast.Assign)
+    assert isinstance(nodes[2], Comment)
+    assert nodes[2].inline
 
 
 def test_comments_to_if():
@@ -168,6 +184,7 @@ def test_comments_to_if():
     body_nodes = nodes[0].body
     assert len(body_nodes) == 2
     assert isinstance(body_nodes[0], Comment)
+    assert body_nodes[0].inline
     assert isinstance(body_nodes[1], ast.Expr)
 
     orelse_nodes = nodes[0].orelse
@@ -175,11 +192,13 @@ def test_comments_to_if():
     orelse_if_nodes = orelse_nodes[0].body
     assert len(orelse_if_nodes) == 2
     assert isinstance(orelse_if_nodes[0], Comment)
+    assert orelse_if_nodes[0].inline
     assert isinstance(orelse_if_nodes[1], ast.Expr)
 
     orelse_else_nodes = orelse_nodes[0].orelse
     assert len(orelse_else_nodes) == 2
     assert isinstance(orelse_else_nodes[0], Comment)
+    assert orelse_else_nodes[0].inline
     assert isinstance(orelse_else_nodes[1], ast.Expr)
 
 
@@ -198,14 +217,14 @@ def test_comments_to_for():
     body_nodes = nodes[0].body
     assert len(body_nodes) == 3
     assert isinstance(body_nodes[0], Comment)
-    assert isinstance(body_nodes[1], Comment)
-    assert isinstance(body_nodes[2], ast.Continue)
+    assert isinstance(body_nodes[1], ast.Continue)
+    assert isinstance(body_nodes[2], Comment)
 
     orelse_nodes = nodes[0].orelse
     assert len(orelse_nodes) == 3
     assert isinstance(orelse_nodes[0], Comment)
-    assert isinstance(orelse_nodes[1], Comment)
-    assert isinstance(orelse_nodes[2], ast.Pass)
+    assert isinstance(orelse_nodes[1], ast.Pass)
+    assert isinstance(orelse_nodes[2], Comment)
 
 
 def test_comments_to_try():
@@ -230,8 +249,8 @@ def test_comments_to_try():
     body_nodes = nodes[0].body
     assert len(body_nodes) == 3
     assert isinstance(body_nodes[0], Comment)
-    assert isinstance(body_nodes[1], Comment)
-    assert isinstance(body_nodes[2], ast.Expr)
+    assert isinstance(body_nodes[1], ast.Expr)
+    assert isinstance(body_nodes[2], Comment)
 
     handlers_nodes = nodes[0].handlers
     assert len(handlers_nodes) == 2
@@ -239,20 +258,20 @@ def test_comments_to_try():
         handler_nodes = h_node.body
         assert len(handler_nodes) == 3
         assert isinstance(handler_nodes[0], Comment)
-        assert isinstance(handler_nodes[1], Comment)
-        assert isinstance(handler_nodes[2], ast.Pass)
+        assert isinstance(handler_nodes[1], ast.Pass)
+        assert isinstance(handler_nodes[2], Comment)
 
     else_nodes = nodes[0].orelse
     assert len(else_nodes) == 3
     assert isinstance(else_nodes[0], Comment)
-    assert isinstance(else_nodes[1], Comment)
-    assert isinstance(else_nodes[2], ast.Expr)
+    assert isinstance(else_nodes[1], ast.Expr)
+    assert isinstance(else_nodes[2], Comment)
 
     finalbody_nodes = nodes[0].finalbody
     assert len(finalbody_nodes) == 3
     assert isinstance(finalbody_nodes[0], Comment)
-    assert isinstance(finalbody_nodes[1], Comment)
-    assert isinstance(finalbody_nodes[2], ast.Expr)
+    assert isinstance(finalbody_nodes[1], ast.Expr)
+    assert isinstance(finalbody_nodes[2], Comment)
 
 
 def test_comment_to_multiline_expr():
@@ -267,5 +286,6 @@ def test_comment_to_multiline_expr():
     if_node = parse(source).body[0]
     body_nodes = if_node.body
     assert len(body_nodes) == 2
-    assert isinstance(body_nodes[0], Comment)
-    assert isinstance(body_nodes[1], ast.Expr)
+    assert isinstance(body_nodes[0], ast.Expr)
+    assert isinstance(body_nodes[1], Comment)
+    assert body_nodes[1].inline

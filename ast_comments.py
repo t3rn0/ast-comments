@@ -8,7 +8,11 @@ from typing import Dict, List, Tuple, Union
 
 class Comment(ast.AST):
     value: str
-    _fields = ("value",)
+    inline: bool
+    _fields = (
+        "value",
+        "inline",
+    )
 
 
 _CONTAINER_ATTRS = ["body", "handlers", "orelse", "finalbody"]
@@ -35,6 +39,7 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
         end_lineno, end_col_offset = t.end
         c = Comment(
             value=t.string,
+            inline=t.string != t.line.strip("\n").strip(" "),
             lineno=lineno,
             col_offset=col_offset,
             end_lineno=end_lineno,
@@ -72,7 +77,7 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
 
         attr = getattr(target_node, target_attr)
         attr.append(c_node)
-        attr.sort(key=lambda x: (x.end_lineno, not isinstance(x, Comment)))
+        attr.sort(key=lambda x: (x.end_lineno, isinstance(x, Comment)))
 
 
 def _get_tree_intervals(
@@ -97,6 +102,7 @@ def _get_tree_intervals(
     return res
 
 
+# get min and max line from a source tree
 def _get_interval(items: List[ast.AST]) -> Tuple[int, int]:
     linenos, end_linenos = [], []
     for item in items:
@@ -110,7 +116,10 @@ if sys.version_info >= (3, 9):
 
     class _Unparser(ast._Unparser):
         def visit_Comment(self, node: Comment) -> None:
-            self.fill(node.value)
+            if node.inline:
+                self.write(f"  {node.value}")
+            else:
+                self.fill(node.value)
 
         def visit_If(self, node: ast.If) -> None:
             def _get_first_not_comment_idx(orelse: list[ast.stmt]) -> int:
