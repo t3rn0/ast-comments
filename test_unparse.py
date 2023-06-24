@@ -10,6 +10,8 @@ Same source samples as in test_parse.py are used.
 
 from textwrap import dedent
 
+import pytest
+
 from ast_comments import dump, parse, unparse
 
 
@@ -173,6 +175,18 @@ def test_comment_to_multiline_expr():
     _test_unparse(source)
 
 
+@pytest.mark.xfail(reason="https://github.com/t3rn0/ast-comments/issues/13")
+def test_comment_in_multilined_list():
+    source = dedent(
+        """
+        lst = [
+            1  # comment to element
+        ]
+        """
+    )
+    _test_unparse(source)
+
+
 def test_nested_ifs_to_elifs():
     """Collapse nested ifs to equivalent elifs."""
     source = dedent(
@@ -197,15 +211,15 @@ def test_nested_ifs_to_elifs():
 
 def test_inline_comment_stays_inline():
     source = dedent(
-        """ 
+        """
     # abc
 
     class Foo:
         pass
-        
+
     class Bar:  # def
         pass
-        
+
     class FooBar:
         # ghi
         pass

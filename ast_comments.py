@@ -79,6 +79,27 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
         attr.append(c_node)
         attr.sort(key=lambda x: (x.end_lineno, isinstance(x, Comment)))
 
+        # NOTE:
+        # Due to some issues it's possible for comment nodes to go outside of their initial place
+        # after the parse-unparse roundtip:
+        #   before parse/unparse:
+        #   ```
+        #   # comment 0
+        #   some_code  # comment 1
+        #   ```
+        #   after parse/unparse:
+        #   ```
+        #   # comment 0  # comment 1
+        #   some_code
+        #   ```
+        # As temporary workaround I decided to correct inline attributes here so they don't
+        # overlap with each other. This place should be revisited after solving following issues:
+        # - https://github.com/t3rn0/ast-comments/issues/10
+        # - https://github.com/t3rn0/ast-comments/issues/13
+        for left, right in zip(attr[:-1], attr[1:]):
+            if isinstance(left, Comment) and isinstance(right, Comment):
+                right.inline = False
+
 
 def _get_tree_intervals(
     node: ast.AST,
@@ -95,7 +116,7 @@ def _get_tree_intervals(
             low = node.lineno if hasattr(node, "lineno") else min(attr_intervals)[0]
             high = (
                 node.end_lineno
-                if hasattr(node, "endlineno")
+                if hasattr(node, "end_lineno")
                 else max(attr_intervals)[1]
             )
             res[(low, high)] = {"intervals": attr_intervals, "node": node}

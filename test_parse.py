@@ -3,6 +3,8 @@
 import ast
 from textwrap import dedent
 
+import pytest
+
 from ast_comments import Comment, parse
 
 
@@ -289,3 +291,16 @@ def test_comment_to_multiline_expr():
     assert isinstance(body_nodes[0], ast.Expr)
     assert isinstance(body_nodes[1], Comment)
     assert body_nodes[1].inline
+
+
+@pytest.mark.xfail(reason="https://github.com/t3rn0/ast-comments/issues/13")
+def test_comment_in_multilined_list():
+    """Comment to element of the list stays inside the list."""
+    source = dedent(
+        """
+        lst = [
+            1  # comment to element
+        ]
+        """
+    )
+    assert len(parse(source).body) == 1
