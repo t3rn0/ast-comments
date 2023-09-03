@@ -50,7 +50,7 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
     if not comment_nodes:
         return
 
-    tree_intervals = _get_tree_intervals(tree)
+    tree_intervals = _get_tree_intervals(source, tree)
     for c_node in comment_nodes:
         c_lineno = c_node.lineno
         possible_intervals_for_c_node = [
@@ -99,9 +99,11 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
         for left, right in zip(attr[:-1], attr[1:]):
             if isinstance(left, Comment) and isinstance(right, Comment):
                 right.inline = False
-
+    target_node.end_lineno = c_node.end_lineno
+    target_node.end_col_offset = c_node.end_col_offset
 
 def _get_tree_intervals(
+    source: str,
     node: ast.AST,
 ) -> Dict[Tuple[int, int], Dict[str, Union[List[Tuple[int, int]], ast.AST]]]:
     res = {}
@@ -119,6 +121,12 @@ def _get_tree_intervals(
                 if hasattr(node, "end_lineno")
                 else max(attr_intervals)[1]
             )
+            # Add trailing comment lines, doesn't match indentation
+            for line in source.splitlines()[high:]:
+                if line.strip().startswith("#"):
+                    high += 1
+                else:
+                    break
             res[(low, high)] = {"intervals": attr_intervals, "node": node}
     return res
 
@@ -173,3 +181,44 @@ if sys.version_info >= (3, 9):
 
     def unparse(ast_obj: ast.AST) -> str:
         return _Unparser().visit(ast_obj)
+
+
+def get_source_segment(source, node, *, padded=False):
+    """Get source code segment of the *source* that generated *node*.
+
+    If some location information (`lineno`, `end_lineno`, `col_offset`,
+    or `end_col_offset`) is missing, return None.
+
+    If *padded* is `True`, the first line of a multi-line statement will
+    be padded with spaces to match its original position.
+
+    Customized version of ast.get_source_segment that includes trailing
+    inline comments.
+    """
+    try:
+        if node.end_lineno is None or node.end_col_offset is None:
+            return None
+        lineno = node.lineno - 1
+        end_lineno = node.end_lineno - 1
+        col_offset = node.col_offset
+        # Add trailing inline comment:
+        end_col_offset = max(node.body[-1].end_col_offset, node.end_col_offset)
+    except AttributeError:
+        return None
+
+    lines = ast._splitlines_no_ff(source)
+    if end_lineno == lineno:
+        return lines[lineno].encode()[col_offset:end_col_offset].decode()
+
+    if padded:
+        padding = ast._pad_whitespace(lines[lineno].encode()[:col_offset].decode())
+    else:
+        padding = ''
+
+    first = padding + lines[lineno].encode()[col_offset:].decode()
+    last = lines[end_lineno].encode()[:end_col_offset].decode()
+    lines = lines[lineno+1:end_lineno]
+
+    lines.insert(0, first)
+    lines.append(last)
+    return ''.join(lines)

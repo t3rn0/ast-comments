@@ -5,7 +5,7 @@ from textwrap import dedent
 
 import pytest
 
-from ast_comments import Comment, parse
+from ast_comments import Comment, get_source_segment, parse
 
 
 def test_single_comment_in_tree():
@@ -304,3 +304,54 @@ def test_comment_in_multilined_list():
         """
     )
     assert len(parse(source).body) == 1
+
+
+def test_function_with_trailing_comment():
+    """Function with trailing comments inside."""
+    source = dedent(
+        """
+        def foo(*args, **kwargs):
+            print(args, kwargs) # comment to print
+            # A comment
+            # comment in function 'foo'
+        """
+    )
+    nodes = parse(source).body
+    assert len(nodes) == 1
+    function_node = nodes[0]
+    assert function_node.body[1].value == "# comment to print"
+    assert function_node.body[1].inline
+    assert function_node.body[-1].value == "# comment in function 'foo'"
+    assert not function_node.body[-1].inline
+
+
+def test_get_source_segment():
+    """Check that get_source_segment roundtrips function code."""
+    source = dedent(
+        """
+        def foo(*args, **kwargs):
+            print(args, kwargs) # comment to print
+            # A comment
+            # comment in function 'foo'
+        """
+    )
+    function_node = parse(source).body[0]
+    assert source.strip() == get_source_segment(source, function_node)
+
+
+@pytest.mark.xfail(reason="Skipping extraneous comments doesn't work.")
+def test_get_source_segment_outside_comment():
+    """Check that get_source_segment skips extraneous comments."""
+    source = dedent(
+        """
+        def foo(*args, **kwargs):
+            print(args, kwargs) # comment to print
+            # A comment
+            # comment in function 'foo'
+        # comment outside function 'foo'
+        """
+    )
+    function_node = parse(source).body[0]
+    assert function_node.body[-1].value == "# comment in function 'foo'"
+    assert not function_node.body[-1].inline
+    assert source.strip() == get_source_segment(source, function_node)
