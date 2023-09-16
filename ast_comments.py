@@ -58,7 +58,7 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
         ]
 
         if possible_intervals_for_c_node:
-            target_interval = tree_intervals[max(possible_intervals_for_c_node)]
+            target_interval = tree_intervals[max(possible_intervals_for_c_node, key=lambda item: (item[0], -item[1]))]
 
             target_node = target_interval["node"]
             # intervals for every attribute from _CONTAINER_ATTRS for the target node
