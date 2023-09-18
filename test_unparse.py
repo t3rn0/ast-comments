@@ -21,6 +21,27 @@ def _test_unparse(source: str):
     assert dump(source_tree) == dump(equivalent_tree)
 
 
+def test_all_comment_places_in_tree():
+    """Parsed tree has Comment node."""
+    source = """
+# Comment 1
+print('1')
+# Comment 2
+if 1 == 1:
+    # Comment 3
+    print('2')
+    # Comment 4
+else:
+    # Comment 5
+    print('3')
+    # Comment 6
+# Comment 7
+print('4')
+# Comment 8
+"""
+    _test_unparse(source)
+
+
 def test_single_comment_in_tree():
     source = """# comment"""
     _test_unparse(source)

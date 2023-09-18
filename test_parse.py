@@ -8,6 +8,30 @@ import pytest
 from ast_comments import Comment, parse
 
 
+def test_all_comment_places_in_tree():
+    """Parsed tree has Comment node."""
+    source = """
+# Comment 1
+print('1')
+# Comment 2
+if 1 == 1:
+    # Comment 3
+    print('2')
+    # Comment 4
+else:
+    # Comment 5
+    print('3')
+    # Comment 6
+# Comment 7
+print('4')
+# Comment 8
+"""
+    nodes = parse(source).body
+    assert len(nodes) == 7
+    assert isinstance(nodes[0], Comment)
+    assert not nodes[0].inline
+
+
 def test_single_comment_in_tree():
     """Parsed tree has Comment node."""
     source = """# comment"""

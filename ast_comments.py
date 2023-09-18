@@ -4,6 +4,7 @@ import tokenize
 from ast import *  # noqa: F401,F403
 from collections.abc import Iterable
 from typing import Dict, List, Tuple, Union
+import re
 
 
 class Comment(ast.AST):
@@ -50,7 +51,7 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
     if not comment_nodes:
         return
 
-    tree_intervals = _get_tree_intervals(tree)
+    tree_intervals = _get_tree_intervals_and_update_ast_nodes(tree, source)
     for c_node in comment_nodes:
         c_lineno = c_node.lineno
         possible_intervals_for_c_node = [
@@ -101,8 +102,9 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
                 right.inline = False
 
 
-def _get_tree_intervals(
-    node: ast.AST,
+def _get_tree_intervals_and_update_ast_nodes(
+        node: ast.AST,
+        source: str
 ) -> Dict[Tuple[int, int], Dict[str, Union[List[Tuple[int, int]], ast.AST]]]:
     res = {}
     for node in ast.walk(node):
@@ -111,16 +113,59 @@ def _get_tree_intervals(
             if items := getattr(node, attr, None):
                 if not isinstance(items, Iterable):
                     continue
-                attr_intervals.append((*_get_interval(items), attr))
+                attr_intervals.append(_post_extend_interval((*_get_interval(items), attr), source))
         if attr_intervals:
-            low = node.lineno if hasattr(node, "lineno") else min(attr_intervals)[0]
-            high = (
-                node.end_lineno
-                if hasattr(node, "end_lineno")
-                else max(attr_intervals)[1]
-            )
+            low = min(node.lineno, min(attr_intervals)[0]) if hasattr(node, "lineno") else min(attr_intervals)[0]
+            if hasattr(node, "lineno"):
+                node.lineno = low
+            high = max(node.end_lineno, max(attr_intervals)[1]) if hasattr(node, "end_lineno") else max(attr_intervals)[1]
+            if hasattr(node, "end_lineno"):
+                node.end_lineno = high
+
             res[(low, high)] = {"intervals": attr_intervals, "node": node}
     return res
+
+
+### Try to move lower bound lower and upper bound higher while not going out of bounds concerning the current block
+def _post_extend_interval(
+        interval: Tuple[int, int, str],
+        code: str
+) -> Union[List[Tuple[int, int]], ast.AST]:
+    lines = code.split('\n')
+    lines.insert(0, '')
+    low = interval[0]
+    high = interval[1]
+
+    if low == high:
+        # Covering inner blocks like the inside of an if block consisting of only one line
+        start_indentation = _get_indentation_lvl(lines[low])
+    else:
+        # Covering cases of blocks starting at an outer term like 'if' and blocks with more than one line
+        start_indentation = _get_indentation_lvl(lines[low])
+        start_indentation = max(start_indentation, _get_indentation_lvl(lines[low + 1]))
+
+    while low - 1 > 0:
+        if start_indentation <= _get_indentation_lvl(lines[low - 1]):
+            low -= 1
+        else:
+            break
+
+    while high + 1 < len(lines) - 1:
+        if start_indentation <= _get_indentation_lvl(lines[high + 1]):
+            high += 1
+        else:
+            break
+
+    return (low, high, interval[2])
+
+
+def _get_indentation_lvl(line: str) -> int:
+    line.replace('\t', '   ')
+    res = re.findall(r"^ *", line)
+    indentation = 0
+    if len(res) > 0:
+        indentation = len(res[0])
+    return indentation
 
 
 # get min and max line from a source tree
