@@ -121,6 +121,8 @@ def _get_tree_intervals_and_update_ast_nodes(
             high = max(node.end_lineno, max(attr_intervals)[1]) if hasattr(node, "end_lineno") else max(attr_intervals)[1]
             if hasattr(node, "end_lineno"):
                 node.end_lineno = high
+                # also update the end col offset corresponding to the new line
+                node.end_col_offset = len(source.split('\n')[high - 1])
 
             res[(low, high)] = {"intervals": attr_intervals, "node": node}
     return res
