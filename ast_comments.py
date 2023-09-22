@@ -115,14 +115,17 @@ def _get_tree_intervals_and_update_ast_nodes(
                     continue
                 attr_intervals.append(_post_extend_interval((*_get_interval(items), attr), source))
         if attr_intervals:
-            low = min(node.lineno, min(attr_intervals)[0]) if hasattr(node, "lineno") else min(attr_intervals)[0]
-            if hasattr(node, "lineno"):
+            # If the parent node hast lineno and end_lineno we extend them too, because there could be comments at the
+            #  end not covered by the intervals gathered in the attributes
+            if hasattr(node, "lineno") and hasattr(node, "end_lineno"):
+                low, high, _ = _post_extend_interval((node.lineno, node.end_lineno, ''), source)
                 node.lineno = low
-            high = max(node.end_lineno, max(attr_intervals)[1]) if hasattr(node, "end_lineno") else max(attr_intervals)[1]
-            if hasattr(node, "end_lineno"):
                 node.end_lineno = high
                 # also update the end col offset corresponding to the new line
                 node.end_col_offset = len(source.split('\n')[high - 1])
+            else:
+                low = min(node.lineno, min(attr_intervals)[0]) if hasattr(node, "lineno") else min(attr_intervals)[0]
+                high = max(node.end_lineno, max(attr_intervals)[1]) if hasattr(node, "end_lineno") else max(attr_intervals)[1]
 
             res[(low, high)] = {"intervals": attr_intervals, "node": node}
     return res
@@ -137,16 +140,19 @@ def _post_extend_interval(
     lines.insert(0, '')
     low = interval[0]
     high = interval[1]
+    skip_lower = False
 
     if low == high:
         # Covering inner blocks like the inside of an if block consisting of only one line
         start_indentation = _get_indentation_lvl(lines[low])
     else:
         # Covering cases of blocks starting at an outer term like 'if' and blocks with more than one line
-        start_indentation = _get_indentation_lvl(lines[low])
-        start_indentation = max(start_indentation, _get_indentation_lvl(lines[low + 1]))
+        lower_bound = _get_indentation_lvl(lines[low])
+        start_indentation = max(lower_bound, _get_indentation_lvl(lines[low + 1]))
+        if start_indentation != lower_bound:
+            skip_lower = True
 
-    while low - 1 > 0:
+    while not skip_lower and low - 1 > 0:
         if start_indentation <= _get_indentation_lvl(lines[low - 1]):
             low -= 1
         else:
