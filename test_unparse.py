@@ -26,6 +26,12 @@ def test_single_comment_in_tree():
     _test_unparse(source)
 
 
+def test_comment_ends_with_space():
+    """Spaces at the end of a comment does not change its inlined value."""
+    source = """# comment """
+    _test_unparse(source)
+
+
 def test_separate_line_single_line():
     source = dedent(
         """
