@@ -17,6 +17,13 @@ def test_single_comment_in_tree():
     assert not nodes[0].inline
 
 
+def test_comment_ends_with_space():
+    """Spaces at the end of a comment does not change its inlined value."""
+    source = """# comment """
+    nodes = parse(source).body
+    assert not nodes[0].inline
+
+
 def test_separate_line_single_line():
     """Comment to the following line. Order in which nodes appears is preserved."""
     source = dedent(

@@ -39,7 +39,7 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
         end_lineno, end_col_offset = t.end
         c = Comment(
             value=t.string,
-            inline=t.string != t.line.strip("\n").strip(" "),
+            inline=t.string != t.line.strip("\n").lstrip(" "),
             lineno=lineno,
             col_offset=col_offset,
             end_lineno=end_lineno,
