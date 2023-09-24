@@ -113,12 +113,12 @@ def _get_tree_intervals_and_update_ast_nodes(
             if items := getattr(node, attr, None):
                 if not isinstance(items, Iterable):
                     continue
-                attr_intervals.append(_post_extend_interval((*_get_interval(items), attr), source))
+                attr_intervals.append((*_extend_interval(_get_interval(items), source), attr))
         if attr_intervals:
             # If the parent node hast lineno and end_lineno we extend them too, because there could be comments at the
             #  end not covered by the intervals gathered in the attributes
             if hasattr(node, "lineno") and hasattr(node, "end_lineno"):
-                low, high, _ = _post_extend_interval((node.lineno, node.end_lineno, ''), source)
+                low, high = _extend_interval((node.lineno, node.end_lineno), source)
                 node.lineno = low
                 node.end_lineno = high
                 # also update the end col offset corresponding to the new line
@@ -131,13 +131,17 @@ def _get_tree_intervals_and_update_ast_nodes(
     return res
 
 
-### Try to move lower bound lower and upper bound higher while not going out of bounds concerning the current block
-def _post_extend_interval(
-        interval: Tuple[int, int, str],
+# Try to move lower bound lower and upper bound higher while not going out of bounds concerning the current block
+# The method is based on indentation levels to find the correct upper and lower bounds of the interval looked at
+# by checking where the indentation changes, and it marks the end of the interval
+def _extend_interval(
+        interval: Tuple[int, int],
         code: str
-) -> Union[List[Tuple[int, int]], ast.AST]:
+) -> tuple[int, int]:
     lines = code.split('\n')
+    # Insert an empty line to correspond to the lineno values from ast nodes which start at 1 instead of 0
     lines.insert(0, '')
+
     low = interval[0]
     high = interval[1]
     skip_lower = False
@@ -164,7 +168,7 @@ def _post_extend_interval(
         else:
             break
 
-    return (low, high, interval[2])
+    return (low, high)
 
 
 def _get_indentation_lvl(line: str) -> int:
