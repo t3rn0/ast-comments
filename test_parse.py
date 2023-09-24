@@ -8,7 +8,7 @@ import pytest
 from ast_comments import Comment, parse
 
 
-def test_all_comment_places_in_tree():
+def test_all_comments_in_tree():
     """Parsed tree has Comment node."""
     source = """
 # Comment 1
