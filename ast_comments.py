@@ -152,12 +152,14 @@ def _extend_interval(
     else:
         # Covering cases of blocks starting at an outer term like 'if' and blocks with more than one line
         lower_bound = _get_indentation_lvl(lines[low])
-        start_indentation = max(lower_bound, _get_indentation_lvl(lines[low + 1]))
+        start_indentation = max(lower_bound, _get_indentation_lvl(_get_first_line_not_comment(lines[low + 1:])))
         if start_indentation != lower_bound:
             skip_lower = True
 
     while not skip_lower and low - 1 > 0:
-        if start_indentation <= _get_indentation_lvl(lines[low - 1]):
+        # The upper bound ignores comments which are not correctly aligned, due to the fact
+        # that there must always be an ast node other than a comment one with a lower indentation above
+        if re.match(r'^ *#.*', lines[low - 1]) or start_indentation <= _get_indentation_lvl(lines[low - 1]):
             low -= 1
         else:
             break
@@ -169,6 +171,15 @@ def _extend_interval(
             break
 
     return (low, high)
+
+
+# Searches for the first line not being a comment
+# In each block there must be at least one, otherwise the code is not valid
+def _get_first_line_not_comment(lines: List[str]):
+    for line in lines:
+        if not re.match(r'^ *#.*', line):
+            return line
+    return ''
 
 
 def _get_indentation_lvl(line: str) -> int:
