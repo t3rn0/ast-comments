@@ -164,7 +164,7 @@ def _extend_interval(
         else:
             break
 
-    while high + 1 < len(lines) - 1:
+    while high + 1 < len(lines):
         if start_indentation <= _get_indentation_lvl(lines[high + 1]):
             high += 1
         else:
