@@ -8,33 +8,58 @@ import pytest
 from ast_comments import Comment, parse
 
 
-def test_all_comments_in_tree():
+def test_comment_at_start_of_inner_block_getting_correctly_parsed():
     """Parsed tree has Comment node."""
-    source = """
-# Comment 1
-print('1')
-# Comment 2
-if 1 == 1:
-# Comment 3
-    print('2')
-    # Comment 4
-else:
-# Comment 5
-    print('3')
-    # Comment 6
-# Comment 7
-print('4')
-# Comment 8
-def test():
-# Comment 9
-    print('2')
-    # Comment 10
-# Comment 11
-"""
+    source = dedent(
+        """
+        def test():
+            # Comment at start of block
+            hello = 'hello'
+        """
+    )
     nodes = parse(source).body
-    assert len(nodes) == 7
-    assert isinstance(nodes[0], Comment)
-    assert not nodes[0].inline
+    assert isinstance(nodes[0].body[0], Comment)
+
+
+def test_comment_at_start_of_inner_block_with_wrong_indentation_is_still_inside_the_block():
+    """Parsed tree has Comment node."""
+    source = dedent(
+        """
+        def test():
+        # Comment at start of block
+            hello = 'hello'
+        """
+    )
+    nodes = parse(source).body
+    assert isinstance(nodes[0].body[0], Comment)
+
+
+def test_comment_at_end_of_inner_block_getting_correctly_parsed():
+    """Parsed tree has Comment node."""
+    source = dedent(
+        """
+        def test():
+            hello = 'hello'
+            # Comment at end of block
+        """
+    )
+    nodes = parse(source).body
+    assert isinstance(nodes[0].body[1], Comment)
+
+
+def test_comment_at_end_of_inner_block_with_wrong_indentation_gets_moved_to_next_block():
+    """Parsed tree has Comment node."""
+    source = dedent(
+        """
+        if 1 == 1:
+            hello = 'hello'
+        # Comment at end of block
+        else:
+            hello = 'hello'
+        """
+    )
+    nodes = parse(source).body
+    assert isinstance(nodes[0].orelse[0], Comment)
 
 
 def test_single_comment_in_tree():
