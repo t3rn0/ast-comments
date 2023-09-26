@@ -21,9 +21,8 @@ def _test_unparse(source: str):
     assert dump(source_tree) == dump(equivalent_tree)
 
 
-
 def test_comment_at_start_of_inner_block_getting_correctly_parsed():
-    """Parsed tree has Comment node."""
+    """Comment at the start of a new inlined block/interval"""
     source = dedent(
         """
         def test():
@@ -35,7 +34,7 @@ def test_comment_at_start_of_inner_block_getting_correctly_parsed():
 
 
 def test_comment_at_start_of_inner_block_with_wrong_indentation_is_still_inside_the_block():
-    """Parsed tree has Comment node."""
+    """Comment at the start of a new inlined block/interval with wrong indentation"""
     source = dedent(
         """
         def test():
@@ -47,7 +46,7 @@ def test_comment_at_start_of_inner_block_with_wrong_indentation_is_still_inside_
 
 
 def test_comment_at_end_of_inner_block_getting_correctly_parsed():
-    """Parsed tree has Comment node."""
+    """Comment at the end of a new inlined block/interval"""
     source = dedent(
         """
         def test():
@@ -59,7 +58,7 @@ def test_comment_at_end_of_inner_block_getting_correctly_parsed():
 
 
 def test_comment_at_end_of_inner_block_with_wrong_indentation_gets_moved_to_next_block():
-    """Parsed tree has Comment node."""
+    """Comment at the end of a new inlined block/interval with wrong indentation should get assigned to next block"""
     source = dedent(
         """
         if 1 == 1:

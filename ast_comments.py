@@ -125,7 +125,8 @@ def _get_tree_intervals_and_update_ast_nodes(
                 node.end_col_offset = len(source.split('\n')[high - 1])
             else:
                 low = min(node.lineno, min(attr_intervals)[0]) if hasattr(node, "lineno") else min(attr_intervals)[0]
-                high = max(node.end_lineno, max(attr_intervals)[1]) if hasattr(node, "end_lineno") else max(attr_intervals)[1]
+                high = max(node.end_lineno, max(attr_intervals)[1]) if hasattr(node, "end_lineno") else \
+                    max(attr_intervals)[1]
 
             res[(low, high)] = {"intervals": attr_intervals, "node": node}
     return res
@@ -137,7 +138,7 @@ def _get_tree_intervals_and_update_ast_nodes(
 def _extend_interval(
         interval: Tuple[int, int],
         code: str
-) -> tuple[int, int]:
+) -> Tuple[int, int]:
     lines = code.split('\n')
     # Insert an empty line to correspond to the lineno values from ast nodes which start at 1 instead of 0
     lines.insert(0, '')
@@ -170,7 +171,7 @@ def _extend_interval(
         else:
             break
 
-    return (low, high)
+    return low, high
 
 
 # Searches for the first line not being a comment
@@ -238,6 +239,7 @@ if sys.version_info >= (3, 9):
                 self.fill("else")
                 with self.block():
                     self.traverse(node.orelse)
+
 
     def unparse(ast_obj: ast.AST) -> str:
         return _Unparser().visit(ast_obj)
