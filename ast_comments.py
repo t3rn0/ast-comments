@@ -1,10 +1,10 @@
 import ast
+import re
 import sys
 import tokenize
 from ast import *  # noqa: F401,F403
 from collections.abc import Iterable
 from typing import Dict, List, Tuple, Union
-import re
 
 
 class Comment(ast.AST):
@@ -59,7 +59,9 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
         ]
 
         if possible_intervals_for_c_node:
-            target_interval = tree_intervals[max(possible_intervals_for_c_node, key=lambda item: (item[0], -item[1]))]
+            target_interval = tree_intervals[
+                max(possible_intervals_for_c_node, key=lambda item: (item[0], -item[1]))
+            ]
 
             target_node = target_interval["node"]
             # intervals for every attribute from _CONTAINER_ATTRS for the target node
@@ -103,8 +105,7 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
 
 
 def _get_tree_intervals_and_update_ast_nodes(
-        node: ast.AST,
-        source: str
+    node: ast.AST, source: str
 ) -> Dict[Tuple[int, int], Dict[str, Union[List[Tuple[int, int]], ast.AST]]]:
     res = {}
     for node in ast.walk(node):
@@ -113,35 +114,43 @@ def _get_tree_intervals_and_update_ast_nodes(
             if items := getattr(node, attr, None):
                 if not isinstance(items, Iterable):
                     continue
-                attr_intervals.append((*_extend_interval(_get_interval(items), source), attr))
+                attr_intervals.append(
+                    (*_extend_interval(_get_interval(items), source), attr)
+                )
         if attr_intervals:
-            # If the parent node hast lineno and end_lineno we extend them too, because there could be comments at the
-            #  end not covered by the intervals gathered in the attributes
+            # If the parent node hast lineno and end_lineno we extend them too, because there
+            # could be comments at the end not covered by the intervals gathered in the attributes
             if hasattr(node, "lineno") and hasattr(node, "end_lineno"):
                 low, high = _extend_interval((node.lineno, node.end_lineno), source)
                 node.lineno = low
                 node.end_lineno = high
                 # also update the end col offset corresponding to the new line
-                node.end_col_offset = len(source.split('\n')[high - 1])
+                node.end_col_offset = len(source.split("\n")[high - 1])
             else:
-                low = min(node.lineno, min(attr_intervals)[0]) if hasattr(node, "lineno") else min(attr_intervals)[0]
-                high = max(node.end_lineno, max(attr_intervals)[1]) if hasattr(node, "end_lineno") else \
-                    max(attr_intervals)[1]
+                low = (
+                    min(node.lineno, min(attr_intervals)[0])
+                    if hasattr(node, "lineno")
+                    else min(attr_intervals)[0]
+                )
+                high = (
+                    max(node.end_lineno, max(attr_intervals)[1])
+                    if hasattr(node, "end_lineno")
+                    else max(attr_intervals)[1]
+                )
 
             res[(low, high)] = {"intervals": attr_intervals, "node": node}
     return res
 
 
-# Try to move lower bound lower and upper bound higher while not going out of bounds concerning the current block
-# The method is based on indentation levels to find the correct upper and lower bounds of the interval looked at
-# by checking where the indentation changes, and it marks the end of the interval
-def _extend_interval(
-        interval: Tuple[int, int],
-        code: str
-) -> Tuple[int, int]:
-    lines = code.split('\n')
-    # Insert an empty line to correspond to the lineno values from ast nodes which start at 1 instead of 0
-    lines.insert(0, '')
+# Try to move lower bound lower and upper bound higher while not going out of bounds concerning
+# the current block. The method is based on indentation levels to find the correct upper and lower
+# bounds of the interval looked at by checking where the indentation changes, and it marks the end
+# of the interval
+def _extend_interval(interval: Tuple[int, int], code: str) -> Tuple[int, int]:
+    lines = code.split("\n")
+    # Insert an empty line to correspond to the lineno values from ast nodes which start at 1
+    # instead of 0
+    lines.insert(0, "")
 
     low = interval[0]
     high = interval[1]
@@ -151,16 +160,23 @@ def _extend_interval(
         # Covering inner blocks like the inside of an if block consisting of only one line
         start_indentation = _get_indentation_lvl(lines[low])
     else:
-        # Covering cases of blocks starting at an outer term like 'if' and blocks with more than one line
+        # Covering cases of blocks starting at an outer term like 'if' and blocks with more than
+        # one line
         lower_bound = _get_indentation_lvl(lines[low])
-        start_indentation = max(lower_bound, _get_indentation_lvl(_get_first_line_not_comment(lines[low + 1:])))
+        start_indentation = max(
+            lower_bound,
+            _get_indentation_lvl(_get_first_line_not_comment(lines[low + 1 :])),
+        )
         if start_indentation != lower_bound:
             skip_lower = True
 
     while not skip_lower and low - 1 > 0:
         # The upper bound ignores comments which are not correctly aligned, due to the fact
-        # that there must always be an ast node other than a comment one with a lower indentation above
-        if re.match(r'^ *#.*', lines[low - 1]) or start_indentation <= _get_indentation_lvl(lines[low - 1]):
+        # that there must always be an ast node other than a comment one with a lower indentation
+        # above
+        if re.match(
+            r"^ *#.*", lines[low - 1]
+        ) or start_indentation <= _get_indentation_lvl(lines[low - 1]):
             low -= 1
         else:
             break
@@ -178,13 +194,13 @@ def _extend_interval(
 # In each block there must be at least one, otherwise the code is not valid
 def _get_first_line_not_comment(lines: List[str]):
     for line in lines:
-        if not re.match(r'^ *#.*', line):
+        if not re.match(r"^ *#.*", line):
             return line
-    return ''
+    return ""
 
 
 def _get_indentation_lvl(line: str) -> int:
-    line.replace('\t', '   ')
+    line.replace("\t", "   ")
     res = re.findall(r"^ *", line)
     indentation = 0
     if len(res) > 0:
@@ -239,7 +255,6 @@ if sys.version_info >= (3, 9):
                 self.fill("else")
                 with self.block():
                     self.traverse(node.orelse)
-
 
     def unparse(ast_obj: ast.AST) -> str:
         return _Unparser().visit(ast_obj)

@@ -20,6 +20,3 @@ flake8-print = "^5.0.0"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[flake8]
-max-line-length = 100

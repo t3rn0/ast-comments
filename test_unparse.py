@@ -58,7 +58,9 @@ def test_comment_at_end_of_inner_block_getting_correctly_parsed():
 
 
 def test_comment_at_end_of_inner_block_with_wrong_indentation_gets_moved_to_next_block():
-    """Comment at the end of a new inlined block/interval with wrong indentation should get assigned to next block"""
+    """Comment at the end of a new inlined block/interval with wrong indentation should get assigned
+    to next block
+    """
     source = dedent(
         """
         if 1 == 1:

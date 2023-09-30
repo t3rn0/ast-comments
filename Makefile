@@ -14,7 +14,7 @@ format:	## format code
 
 .PHONY: lint
 lint:	## lint code
-	flake8 $(ALL_CODE) --config ./pyproject.toml
+	flake8 $(ALL_CODE) --config ./setup.cfg
 	black --check $(ALL_CODE) 
 
 .PHONY: test
