@@ -1,9 +1,9 @@
 import ast
 import sys
 import tokenize
+import typing as _t
 from ast import *  # noqa: F401,F403
 from collections.abc import Iterable
-from typing import Dict, List, Tuple, Union
 
 
 class Comment(ast.AST):
@@ -18,14 +18,14 @@ class Comment(ast.AST):
 _CONTAINER_ATTRS = ["body", "handlers", "orelse", "finalbody"]
 
 
-def parse(source: Union[str, bytes, ast.AST], *args, **kwargs) -> ast.AST:
+def parse(source: _t.Union[str, bytes, ast.AST], *args, **kwargs) -> ast.AST:
     tree = ast.parse(source, *args, **kwargs)
     if isinstance(source, (str, bytes)):
         _enrich(source, tree)
     return tree
 
 
-def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
+def _enrich(source: _t.Union[str, bytes], tree: ast.AST) -> None:
     if isinstance(source, bytes):
         source = source.decode()
     lines_iter = iter(source.splitlines(keepends=True))
@@ -103,7 +103,9 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
 
 def _get_tree_intervals(
     node: ast.AST,
-) -> Dict[Tuple[int, int], Dict[str, Union[List[Tuple[int, int]], ast.AST]]]:
+) -> _t.Dict[
+    _t.Tuple[int, int], _t.Dict[str, _t.Union[_t.List[_t.Tuple[int, int]], ast.AST]]
+]:
     res = {}
     for node in ast.walk(node):
         attr_intervals = []
@@ -124,7 +126,7 @@ def _get_tree_intervals(
 
 
 # get min and max line from a source tree
-def _get_interval(items: List[ast.AST]) -> Tuple[int, int]:
+def _get_interval(items: _t.List[ast.AST]) -> _t.Tuple[int, int]:
     linenos, end_linenos = [], []
     for item in items:
         linenos.append(item.lineno)
