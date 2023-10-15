@@ -2,9 +2,9 @@ import ast
 import re
 import sys
 import tokenize
+import typing as _t
 from ast import *  # noqa: F401,F403
 from collections.abc import Iterable
-from typing import Dict, List, Tuple, Union
 
 
 class Comment(ast.AST):
@@ -19,14 +19,14 @@ class Comment(ast.AST):
 _CONTAINER_ATTRS = ["body", "handlers", "orelse", "finalbody"]
 
 
-def parse(source: Union[str, bytes, ast.AST], *args, **kwargs) -> ast.AST:
+def parse(source: _t.Union[str, bytes, ast.AST], *args, **kwargs) -> ast.AST:
     tree = ast.parse(source, *args, **kwargs)
     if isinstance(source, (str, bytes)):
         _enrich(source, tree)
     return tree
 
 
-def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
+def _enrich(source: _t.Union[str, bytes], tree: ast.AST) -> None:
     if isinstance(source, bytes):
         source = source.decode()
     lines_iter = iter(source.splitlines(keepends=True))
@@ -106,7 +106,9 @@ def _enrich(source: Union[str, bytes], tree: ast.AST) -> None:
 
 def _get_tree_intervals_and_update_ast_nodes(
     node: ast.AST, source: str
-) -> Dict[Tuple[int, int], Dict[str, Union[List[Tuple[int, int]], ast.AST]]]:
+) -> _t.Dict[
+    _t.Tuple[int, int], _t.Dict[str, _t.Union[_t.List[_t.Tuple[int, int]], ast.AST]]
+]:
     res = {}
     for node in ast.walk(node):
         attr_intervals = []
@@ -146,7 +148,7 @@ def _get_tree_intervals_and_update_ast_nodes(
 # the current block. The method is based on indentation levels to find the correct upper and lower
 # bounds of the interval looked at by checking where the indentation changes, and it marks the end
 # of the interval
-def _extend_interval(interval: Tuple[int, int], code: str) -> Tuple[int, int]:
+def _extend_interval(interval: _t.Tuple[int, int], code: str) -> _t.Tuple[int, int]:
     lines = code.split("\n")
     # Insert an empty line to correspond to the lineno values from ast nodes which start at 1
     # instead of 0
@@ -192,7 +194,7 @@ def _extend_interval(interval: Tuple[int, int], code: str) -> Tuple[int, int]:
 
 # Searches for the first line not being a comment
 # In each block there must be at least one, otherwise the code is not valid
-def _get_first_line_not_comment(lines: List[str]):
+def _get_first_line_not_comment(lines: _t.List[str]):
     for line in lines:
         if not re.match(r"^ *#.*", line):
             return line
@@ -209,7 +211,7 @@ def _get_indentation_lvl(line: str) -> int:
 
 
 # get min and max line from a source tree
-def _get_interval(items: List[ast.AST]) -> Tuple[int, int]:
+def _get_interval(items: _t.List[ast.AST]) -> _t.Tuple[int, int]:
     linenos, end_linenos = [], []
     for item in items:
         linenos.append(item.lineno)
