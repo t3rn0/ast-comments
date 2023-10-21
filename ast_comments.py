@@ -196,6 +196,8 @@ def _extend_interval(interval: _t.Tuple[int, int], code: str) -> _t.Tuple[int, i
 # In each block there must be at least one, otherwise the code is not valid
 def _get_first_line_not_comment(lines: _t.List[str]):
     for line in lines:
+        if not line.strip():
+            continue
         if not re.match(r"^ *#.*", line):
             return line
     return ""

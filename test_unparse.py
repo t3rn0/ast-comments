@@ -233,6 +233,19 @@ def test_comment_to_multiline_expr():
     _test_unparse(source)
 
 
+def test_empty_line_not_affect_comment_placement():
+    """Empty line doesn't mess with indendation intervals."""
+    source = dedent(
+        """
+        # comment 1
+        if a:  # comment 2
+
+            pass
+        """
+    )
+    _test_unparse(source)
+
+
 @pytest.mark.xfail(reason="https://github.com/t3rn0/ast-comments/issues/13")
 def test_comment_in_multilined_list():
     source = dedent(

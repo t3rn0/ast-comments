@@ -356,6 +356,23 @@ def test_comment_to_multiline_expr():
     assert body_nodes[1].inline
 
 
+def test_empty_line_not_affect_comment_placement():
+    """Empty line doesn't mess with indendation intervals."""
+    source = dedent(
+        """
+        # comment 1
+        if a:  # comment 2
+
+            pass
+        """
+    )
+    body = parse(source).body
+    assert len(body) == 2
+    assert isinstance(body[0], Comment)
+    if_body = body[1].body
+    assert isinstance(if_body[0], Comment)
+
+
 @pytest.mark.xfail(reason="https://github.com/t3rn0/ast-comments/issues/13")
 def test_comment_in_multilined_list():
     """Comment to element of the list stays inside the list."""
