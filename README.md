@@ -32,6 +32,9 @@ If you have python3.9 or above it's also possible to unparse the tree object wit
 >>> print(unparse(tree))
 hello = 'hello'  # comment to hello
 ```
+**Note**: Python `compile()` cannot be run on the tree output from parse. The included `pre_compile_fixer()` function can be used to fix the tree (stripping 
+comment nodes) if it will be necessary to compile the output.
+
 More examples can be found in test_parse.py and test_unparse.py.
 
 ## Contributing
