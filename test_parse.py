@@ -1,11 +1,41 @@
 """Tests for `ast_comments.parse`."""
 
 import ast
+import dis
 from textwrap import dedent
 
 import pytest
 
-from ast_comments import Comment, parse
+from ast_comments import Comment, parse, pre_compile_fixer
+
+
+def test_compile_parse_output():
+    """
+    Output of `ast_comments.parse` can be compiled after applying the compile_fix helper function.
+    The tree resulting from this compilation should be the same as the tree resulting from
+    compiling the same code without comments.
+    """
+    with_comments = dedent(
+        """
+        func(1, 2)  # comment
+        # Another comment
+        x = 5 * "s"
+        """
+    )
+    without_comments = dedent(
+        """
+        func(1, 2)
+
+        x = 5 * "s"
+        """
+    )
+
+    compiled_with = compile(pre_compile_fixer(parse(with_comments)), "<string>", "exec")
+    compiled_without = compile(parse(without_comments), "<string>", "exec")
+
+    assert list(dis.get_instructions(compiled_with)) == list(
+        dis.get_instructions(compiled_without)
+    )
 
 
 def test_comment_at_start_of_inner_block_getting_correctly_parsed():

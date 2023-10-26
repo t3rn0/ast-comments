@@ -262,3 +262,16 @@ if sys.version_info >= (3, 9):
 
     def unparse(ast_obj: ast.AST) -> str:
         return _Unparser().visit(ast_obj)
+
+
+def pre_compile_fixer(tree: ast.AST) -> ast.AST:
+    """
+    The parse output from ast_comments cannot compile (see issue #23). This function can be
+    run to fix the output so that it can compile.  This transformer strips out Comment nodes.
+    """
+
+    class RewriteComments(ast.NodeTransformer):
+        def visit_Comment(self, node: ast.AST) -> ast.AST:
+            return None
+
+    return RewriteComments().visit(tree)
