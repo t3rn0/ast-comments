@@ -8,6 +8,9 @@ from collections.abc import Iterable
 
 
 class Comment(ast.AST):
+    if sys.version_info >= (3, 10):
+        __match_args__ = ("op", "values")
+    _attributes = ["lineno", "col_offset", "end_lineno", "end_col_offset"]
     value: str
     inline: bool
     _fields = (
