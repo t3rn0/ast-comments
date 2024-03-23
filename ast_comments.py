@@ -40,7 +40,7 @@ def parse(source: _t.Union[str, bytes, ast.AST], *args, **kwargs) -> ast.AST:
     return tree
 
 class ASTEnrichmentWithComments:
-    _CONTAINER_ATTRS = ["body", "handlers", "orelse", "finalbody"]
+    _CONTAINER_ATTRS = ["body", "handlers", "orelse", "finalbody", "elts", "keys"]
     _KEYWORDS = ["if", "else", "try", "except", "finally", "while", "for"]
 
     def __init__(self, source: str, tree: ast.AST):
