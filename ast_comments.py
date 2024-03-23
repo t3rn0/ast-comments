@@ -5,12 +5,16 @@ import tokenize
 import typing as _t
 from ast import *  # noqa: F401,F403
 from collections.abc import Iterable
+from dataclasses import dataclass
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Comment(ast.AST):
     if sys.version_info >= (3, 10):
         __match_args__ = ("value", "inline")
-    _attributes = ["lineno", "col_offset", "end_lineno", "end_col_offset"]
+    _attributes = ("lineno", "col_offset", "end_lineno", "end_col_offset")
     value: str
     inline: bool
     _fields = (
@@ -18,253 +22,199 @@ class Comment(ast.AST):
         "inline",
     )
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(value={self.value}, inline={self.inline})"
 
-_CONTAINER_ATTRS = ["body", "handlers", "orelse", "finalbody"]
-
+@dataclass
+class BlockWithRange:
+    block: list[ast.AST]
+    lineno: int
+    end_lineno: int
 
 def parse(source: _t.Union[str, bytes, ast.AST], *args, **kwargs) -> ast.AST:
     tree = ast.parse(source, *args, **kwargs)
     if isinstance(source, (str, bytes)):
-        _enrich(source, tree)
+        if isinstance(source, bytes):
+            source = source.decode()
+        ASTEnrichmentWithComments(source, tree).enrich()
     return tree
 
+class ASTEnrichmentWithComments:
+    _CONTAINER_ATTRS = ["body", "handlers", "orelse", "finalbody"]
+    _KEYWORDS = ["if", "else", "try", "except", "finally", "while", "for"]
 
-def _enrich(source: _t.Union[str, bytes], tree: ast.AST) -> None:
-    if isinstance(source, bytes):
-        source = source.decode()
-    lines_iter = iter(source.splitlines(keepends=True))
-    tokens = tokenize.generate_tokens(lambda: next(lines_iter))
+    def __init__(self, source: str, tree: ast.AST):
+        self.source = source
+        lines = source.split("\n")
+        # Insert an empty line to correspond to the lineno values from ast nodes which start at 1
+        # instead of 0
+        lines.insert(0, "")
+        self.lines = lines
+        self.tree = tree
+    
+    def enrich(self):
+        lines_iter = iter(self.source.splitlines(keepends=True))
+        tokens = tokenize.generate_tokens(lambda: next(lines_iter))
 
-    comment_nodes = []
-    for t in tokens:
-        if t.type != tokenize.COMMENT:
-            continue
-        lineno, col_offset = t.start
-        end_lineno, end_col_offset = t.end
-        c = Comment(
-            value=t.string,
-            inline=t.string != t.line.strip("\n").lstrip(" "),
-            lineno=lineno,
-            col_offset=col_offset,
-            end_lineno=end_lineno,
-            end_col_offset=end_col_offset,
-        )
-        comment_nodes.append(c)
+        comment_nodes = []
+        for t in tokens:
+            if t.type != tokenize.COMMENT:
+                continue
+            lineno, col_offset = t.start
+            end_lineno, end_col_offset = t.end
+            c = Comment(
+                value=t.string,
+                inline=t.string != t.line.strip("\n").lstrip(" "),
+                lineno=lineno,
+                col_offset=col_offset,
+                end_lineno=end_lineno,
+                end_col_offset=end_col_offset,
+            )
+            comment_nodes.append(c)
 
-    if not comment_nodes:
-        return
+        if not comment_nodes:
+            return
 
-    tree_intervals = _get_tree_intervals_and_update_ast_nodes(tree, source)
-    for c_node in comment_nodes:
-        c_lineno = c_node.lineno
-        possible_intervals_for_c_node = [
-            (x, y) for x, y in tree_intervals if x <= c_lineno <= y
-        ]
-
-        if possible_intervals_for_c_node:
-            target_interval = tree_intervals[
-                max(possible_intervals_for_c_node, key=lambda item: (item[0], -item[1]))
-            ]
-
-            target_node = target_interval["node"]
-            # intervals for every attribute from _CONTAINER_ATTRS for the target node
-            sub_intervals = target_interval["intervals"]
-
-            loc = -1
-            for i, (low, high, _) in enumerate(sub_intervals):
-                if low <= c_lineno <= high or c_lineno < low:
-                    loc = i
-                    break
-
-            *_, target_attr = sub_intervals[loc]
-        else:
-            target_node = tree
-            target_attr = "body"
-
-        attr = getattr(target_node, target_attr)
-        attr.append(c_node)
-        attr.sort(key=lambda x: (x.end_lineno, isinstance(x, Comment)))
-
-        # NOTE:
-        # Due to some issues it's possible for comment nodes to go outside of their initial place
-        # after the parse-unparse roundtip:
-        #   before parse/unparse:
-        #   ```
-        #   # comment 0
-        #   some_code  # comment 1
-        #   ```
-        #   after parse/unparse:
-        #   ```
-        #   # comment 0  # comment 1
-        #   some_code
-        #   ```
-        # As temporary workaround I decided to correct inline attributes here so they don't
-        # overlap with each other. This place should be revisited after solving following issues:
-        # - https://github.com/t3rn0/ast-comments/issues/10
-        # - https://github.com/t3rn0/ast-comments/issues/13
-        for left, right in zip(attr[:-1], attr[1:]):
-            if isinstance(left, Comment) and isinstance(right, Comment):
-                right.inline = False
-
-
-def _get_tree_intervals_and_update_ast_nodes(
-    node: ast.AST, source: str
-) -> _t.Dict[
-    _t.Tuple[int, int], _t.Dict[str, _t.Union[_t.List[_t.Tuple[int, int]], ast.AST]]
-]:
-    res = {}
-    for node in ast.walk(node):
-        attr_intervals = []
-        for attr in _CONTAINER_ATTRS:
-            if items := getattr(node, attr, None):
-                if not isinstance(items, Iterable):
-                    continue
-                attr_intervals.append(
-                    (*_extend_interval(_get_interval(items), source), attr)
-                )
-        if attr_intervals:
-            # If the parent node hast lineno and end_lineno we extend them too, because there
-            # could be comments at the end not covered by the intervals gathered in the attributes
+        self.append_comment_nodes(self.tree, comment_nodes)
+    
+    def append_comment_nodes(self, tree, comment_nodes: list[Comment]):
+        comment_nodes_set = set(comment_nodes)
+        
+        for node in ast.walk(tree):
+            if isinstance(node, Comment):
+                continue
             if hasattr(node, "lineno") and hasattr(node, "end_lineno"):
-                low, high = _extend_interval((node.lineno, node.end_lineno), source)
-                node.lineno = low
-                node.end_lineno = high
-                # also update the end col offset corresponding to the new line
-                node.end_col_offset = len(source.split("\n")[high - 1])
-            else:
-                low = (
-                    min(node.lineno, min(attr_intervals)[0])
-                    if hasattr(node, "lineno")
-                    else min(attr_intervals)[0]
-                )
-                high = (
-                    max(node.end_lineno, max(attr_intervals)[1])
-                    if hasattr(node, "end_lineno")
-                    else max(attr_intervals)[1]
-                )
-
-            res[(low, high)] = {"intervals": attr_intervals, "node": node}
-    return res
-
-
-# Try to move lower bound lower and upper bound higher while not going out of bounds concerning
-# the current block. The method is based on indentation levels to find the correct upper and lower
-# bounds of the interval looked at by checking where the indentation changes, and it marks the end
-# of the interval
-def _extend_interval(interval: _t.Tuple[int, int], code: str) -> _t.Tuple[int, int]:
-    lines = code.split("\n")
-    # Insert an empty line to correspond to the lineno values from ast nodes which start at 1
-    # instead of 0
-    lines.insert(0, "")
-
-    low = interval[0]
-    high = interval[1]
-    skip_lower = False
-
-    if low == high:
-        # Covering inner blocks like the inside of an if block consisting of only one line
-        start_indentation = _get_indentation_lvl(lines[low])
-    else:
-        # Covering cases of blocks starting at an outer term like 'if' and blocks with more than
-        # one line
-        lower_bound = _get_indentation_lvl(lines[low])
-        start_indentation = max(
-            lower_bound,
-            _get_indentation_lvl(_get_first_line_not_comment(lines[low + 1 :])),
-        )
-        if start_indentation != lower_bound:
-            skip_lower = True
-
-    while not skip_lower and low - 1 > 0:
-        # The upper bound ignores comments which are not correctly aligned, due to the fact
-        # that there must always be an ast node other than a comment one with a lower indentation
-        # above
-        if re.match(
-            r"^ *#.*", lines[low - 1]
-        ) or start_indentation <= _get_indentation_lvl(lines[low - 1]):
-            low -= 1
-        else:
-            break
-
-    while high + 1 < len(lines):
-        if start_indentation <= _get_indentation_lvl(lines[high + 1]):
-            high += 1
-        else:
-            break
-
-    return low, high
-
-
-# Searches for the first line not being a comment
-# In each block there must be at least one, otherwise the code is not valid
-def _get_first_line_not_comment(lines: _t.List[str]):
-    for line in lines:
-        if not line.strip():
-            continue
-        if not re.match(r"^ *#.*", line):
-            return line
-    return ""
-
-
-def _get_indentation_lvl(line: str) -> int:
-    line.replace("\t", "   ")
-    res = re.findall(r"^ *", line)
-    indentation = 0
-    if len(res) > 0:
-        indentation = len(res[0])
-    return indentation
+                node_lines_count = node.end_lineno - node.lineno + 1
+                comments_inside_node = self.comments_in_lines_range(comment_nodes_set, node.lineno, node.end_lineno)
+                comments_inside_children = set()
+                block_ranges: list[BlockWithRange] = []
+                children = []
+                for attr_name in dir(node):
+                    attr = getattr(node, attr_name)
+                    if attr_name in ASTEnrichmentWithComments._CONTAINER_ATTRS:
+                        block = attr
+                        low, high = self.get_block_range(block)
+                        block_ranges.append(BlockWithRange(block, low, high))
+                    elif attr_name == "comment":
+                        pass
+                    elif isinstance(attr, ast.AST):
+                        if node_lines_count > 1:
+                            child_node = attr
+                            if hasattr(child_node, "lineno") and hasattr(child_node, "end_lineno"):
+                                children.append(child_node)
+                                comments_inside_child_node = self.comments_in_lines_range(comment_nodes_set, child_node.lineno, child_node.end_lineno)
+                                comments_inside_children = comments_inside_children.union(comments_inside_child_node)
+                    elif isinstance(attr, list):
+                        if node_lines_count > 1:
+                            children_nodes = attr
+                            for child_node in children_nodes:
+                                if isinstance(child_node, ast.AST) and not isinstance(child_node, Comment) and hasattr(child_node, "lineno") and hasattr(child_node, "end_lineno"):
+                                    children.append(child_node)
+                                    comments_inside_child_node = self.comments_in_lines_range(comment_nodes_set, child_node.lineno, child_node.end_lineno)
+                                    comments_inside_children = comments_inside_children.union(comments_inside_child_node)
+                block_ranges.sort(key=lambda b: b.lineno)
+                node_comments = comments_inside_node - comments_inside_children
+                for node_comment in node_comments:
+                    if node_comment.inline:
+                        if len(children) > 0:
+                            inf_child = self.get_inf_node_for_comment(children, node_comment)
+                            if inf_child is not None:
+                                inf_child.comment = node_comment
+                                self.add_comment_field_to_node_class(inf_child)
+                                comment_nodes_set.remove(node_comment)
+                                continue
+                        if len(block_ranges) > 0:
+                            # comment after "if", "else", "try", "finally" and etc. Add it as not inline before the first block
+                            sup_block = self.get_sup_block_for_comment(block_ranges, node_comment)
+                            if sup_block is not None:
+                                node_comment.inline = False
+                                self.add_comment_to_block(sup_block.block, node_comment)
+                                comment_nodes_set.remove(node_comment)
+                                continue
+                        else:
+                            node.comment = node_comment
+                            self.add_comment_field_to_node_class(node)
+                            comment_nodes_set.remove(node_comment)
+                            continue
+                    else:
+                        if len(block_ranges) > 0:
+                            inf_block = self.get_inf_block_for_comment(block_ranges, node_comment)
+                            sup_block = self.get_sup_block_for_comment(block_ranges, node_comment)
+                            block = None
+                            if inf_block is not None and sup_block is not None:
+                                for i, line in enumerate(self.lines[inf_block.end_lineno + 1:sup_block.lineno]):
+                                    if not self.is_comment_line(line):
+                                        for keyword in ASTEnrichmentWithComments._KEYWORDS:
+                                            if keyword in line:
+                                                line_number = inf_block.end_lineno + 1 + i
+                                                block = inf_block if node_comment.lineno < line_number else sup_block
+                                                break
+                                    if block is not None:
+                                        break
+                                
+                            else:
+                                block = inf_block or sup_block
+                            if block is not None:
+                                self.add_comment_to_block(block.block, node_comment)
+                                comment_nodes_set.remove(node_comment)
+                                continue
+        
+        for comment_node in comment_nodes_set:
+            body = getattr(self.tree, "body")
+            self.add_comment_to_block(body, comment_node)
 
 
-# get min and max line from a source tree
-def _get_interval(items: _t.List[ast.AST]) -> _t.Tuple[int, int]:
-    linenos, end_linenos = [], []
-    for item in items:
-        linenos.append(item.lineno)
-        end_linenos.append(item.end_lineno)
-    return min(linenos), max(end_linenos)
+    def get_inf_node_for_comment(self, nodes: list[ast.AST], node_comment: Comment):
+        inf_node = None
+        for node in nodes:
+            if node.lineno <= node_comment.lineno <= node.end_lineno and (inf_node is None or inf_node.end_col_offset < node.end_col_offset):
+                inf_node = node
+        return inf_node
+
+    def get_inf_block_for_comment(self, blocks: list[BlockWithRange], node_comment: Comment):
+        inf_block = None
+        for block in blocks:
+            if block.end_lineno < node_comment.lineno and (inf_block is None or inf_block.end_lineno < block.end_lineno):
+                inf_block = block
+        return inf_block
+    
+    def get_sup_block_for_comment(self, blocks: list[BlockWithRange], node_comment: Comment):
+        sup_block = None
+        for block in blocks:
+            if block.lineno > node_comment.end_lineno and (sup_block is None or sup_block.lineno > block.lineno):
+                sup_block = block
+        return sup_block
+
+    def comments_in_lines_range(self, comment_nodes: list[Comment], low: int, high: int):
+        return set([comment_node for comment_node in comment_nodes if low <= comment_node.lineno <= high])
+
+    def comments_in_range(self, comment_nodes: list[Comment], low: int, high: int):
+        return set([comment_node for comment_node in comment_nodes if low <= comment_node.lineno < high])
+
+    def get_block_range(self, block: list[ast.AST]):
+        linenos, end_linenos = [], []
+        for node in block:
+            linenos.append(node.lineno)
+            end_linenos.append(node.end_lineno)
+        return min(linenos), max(end_linenos)
+    
+    def add_comment_to_block(self, block, comment_node):
+        block.append(comment_node)
+        block.sort(key=lambda x: (x.end_lineno, isinstance(x, Comment)))
+
+    def is_comment_line(self, line: str):
+        return re.match(r"^ *#.*", line) is not None
+
+    def add_comment_field_to_node_class(self, node: ast.AST):
+        fields = set(node.__class__._fields)
+        field_name = "comment"
+        if field_name not in fields:
+            fields.add("comment")
+            node.__class__._fields = tuple(fields)
 
 
-# `unparse` has been introduced in Python 3.9
-if sys.version_info >= (3, 9):
-
-    class _Unparser(ast._Unparser):
-        def visit_Comment(self, node: Comment) -> None:
-            if node.inline:
-                self.write(f"  {node.value}")
-            else:
-                self.fill(node.value)
-
-        def visit_If(self, node: ast.If) -> None:
-            def _get_first_not_comment_idx(orelse: list[ast.stmt]) -> int:
-                i = 0
-                while i < len(orelse) and isinstance(orelse[i], Comment):
-                    i += 1
-                return i
-
-            self.fill("if ")
-            self.traverse(node.test)
-            with self.block():
-                self.traverse(node.body)
-            # collapse nested ifs into equivalent elifs.
-            while node.orelse:
-                i = _get_first_not_comment_idx(node.orelse)
-                if len(node.orelse[i:]) != 1 or not isinstance(node.orelse[i], ast.If):
-                    break
-                for c_node in node.orelse[:i]:
-                    self.traverse(c_node)
-                node = node.orelse[i]
-                self.fill("elif ")
-                self.traverse(node.test)
-                with self.block():
-                    self.traverse(node.body)
-            # final else
-            if node.orelse:
-                self.fill("else")
-                with self.block():
-                    self.traverse(node.orelse)
-
-    def unparse(ast_obj: ast.AST) -> str:
-        return _Unparser().visit(ast_obj)
+def unparse(ast_obj: ast.AST) -> str:
+    return _Unparser().visit(ast_obj)
 
 
 def pre_compile_fixer(tree: ast.AST) -> ast.AST:
