@@ -93,8 +93,9 @@ class ASTEnrichmentWithComments:
                     attr = getattr(node, attr_name)
                     if attr_name in ASTEnrichmentWithComments._CONTAINER_ATTRS:
                         block = attr
-                        low, high = self.get_block_range(block)
-                        block_ranges.append(BlockWithRange(block, low, high))
+                        if isinstance(block, list) and len(block) > 0:
+                            low, high = self.get_block_range(block)
+                            block_ranges.append(BlockWithRange(block, low, high))
                     elif attr_name == "comment":
                         pass
                     elif isinstance(attr, ast.AST):
@@ -228,3 +229,4 @@ def pre_compile_fixer(tree: ast.AST) -> ast.AST:
             return None
 
     return RewriteComments().visit(tree)
+
