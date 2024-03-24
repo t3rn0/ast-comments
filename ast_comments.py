@@ -139,22 +139,24 @@ class ASTEnrichmentWithComments:
                             continue
                     else:
                         if len(block_ranges) > 0:
-                            inf_block = self.get_inf_block_for_comment(block_ranges, node_comment)
-                            sup_block = self.get_sup_block_for_comment(block_ranges, node_comment)
-                            block = None
-                            if inf_block is not None and sup_block is not None:
-                                for i, line in enumerate(self.lines[inf_block.end_lineno + 1:sup_block.lineno]):
-                                    if not self.is_comment_line(line):
-                                        for keyword in ASTEnrichmentWithComments._KEYWORDS:
-                                            if keyword in line:
-                                                line_number = inf_block.end_lineno + 1 + i
-                                                block = inf_block if node_comment.lineno < line_number else sup_block
-                                                break
-                                    if block is not None:
-                                        break
-                                
-                            else:
-                                block = inf_block or sup_block
+                            block = self.get_block_around_comment(block_ranges, node_comment)
+                            if block is None:
+                                inf_block = self.get_inf_block_for_comment(block_ranges, node_comment)
+                                sup_block = self.get_sup_block_for_comment(block_ranges, node_comment)
+                                block = None
+                                if inf_block is not None and sup_block is not None:
+                                    for i, line in enumerate(self.lines[inf_block.end_lineno + 1:sup_block.lineno]):
+                                        if not self.is_comment_line(line):
+                                            for keyword in ASTEnrichmentWithComments._KEYWORDS:
+                                                if keyword in line:
+                                                    line_number = inf_block.end_lineno + 1 + i
+                                                    block = inf_block if node_comment.lineno < line_number else sup_block
+                                                    break
+                                        if block is not None:
+                                            break
+                                    
+                                else:
+                                    block = inf_block or sup_block
                             if block is not None:
                                 self.add_comment_to_block(block.block, node_comment)
                                 comment_nodes_set.remove(node_comment)
@@ -171,6 +173,12 @@ class ASTEnrichmentWithComments:
             if node.lineno <= node_comment.lineno <= node.end_lineno and (inf_node is None or inf_node.end_col_offset < node.end_col_offset):
                 inf_node = node
         return inf_node
+
+    def get_block_around_comment(self, blocks: list[BlockWithRange], node_comment: Comment):
+        for block in blocks:
+            if block.lineno <= node_comment.lineno and node_comment.end_lineno <= block.end_lineno:
+                return block
+        return None
 
     def get_inf_block_for_comment(self, blocks: list[BlockWithRange], node_comment: Comment):
         inf_block = None
