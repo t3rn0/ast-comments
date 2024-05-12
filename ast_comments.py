@@ -41,7 +41,7 @@ def parse(source: _t.Union[str, bytes, ast.AST], *args, **kwargs) -> ast.AST:
 
 class ASTEnrichmentWithComments:
     _CONTAINER_ATTRS = ["body", "handlers", "orelse", "finalbody", "elts", "keys"]
-    _KEYWORDS = ["if", "else", "try", "except", "finally", "while", "for"]
+    _KEYWORDS = ["if", "else", "elif", "try", "except", "finally", "while", "for"]
 
     def __init__(self, source: str, tree: ast.AST):
         self.source = source
@@ -52,8 +52,9 @@ class ASTEnrichmentWithComments:
         self.lines = lines
         self.tree = tree
     
-    def enrich(self):
-        lines_iter = iter(self.source.splitlines(keepends=True))
+    @staticmethod
+    def extract_comment_nodes(code: str):
+        lines_iter = iter(code.splitlines(keepends=True))
         tokens = tokenize.generate_tokens(lambda: next(lines_iter))
 
         comment_nodes = []
@@ -71,6 +72,10 @@ class ASTEnrichmentWithComments:
                 end_col_offset=end_col_offset,
             )
             comment_nodes.append(c)
+        return comment_nodes
+
+    def enrich(self):
+        comment_nodes = ASTEnrichmentWithComments.extract_comment_nodes(self.source)
 
         if not comment_nodes:
             return
@@ -94,29 +99,27 @@ class ASTEnrichmentWithComments:
                     if attr_name in ASTEnrichmentWithComments._CONTAINER_ATTRS:
                         block = attr
                         if isinstance(block, list) and len(block) > 0:
+                            # fill node blocks
                             low, high = self.get_block_range(block)
                             block_ranges.append(BlockWithRange(block, low, high))
                     elif attr_name == "comment":
                         pass
-                    elif isinstance(attr, ast.AST):
-                        if node_lines_count > 1:
+                    elif node_lines_count > 1:
+                        # child on any line expect the node's last one can have comment inside
+                        if isinstance(attr, ast.AST) and not isinstance(attr, Comment):
                             child_node = attr
-                            if hasattr(child_node, "lineno") and hasattr(child_node, "end_lineno"):
-                                children.append(child_node)
-                                comments_inside_child_node = self.comments_in_lines_range(comment_nodes_set, child_node.lineno, child_node.end_lineno)
-                                comments_inside_children = comments_inside_children.union(comments_inside_child_node)
-                    elif isinstance(attr, list):
-                        if node_lines_count > 1:
+                            self.append_child_with_inner_comment(node, comment_nodes_set, child_node, children, comments_inside_children)
+                        elif isinstance(attr, list):
                             children_nodes = attr
                             for child_node in children_nodes:
-                                if isinstance(child_node, ast.AST) and not isinstance(child_node, Comment) and hasattr(child_node, "lineno") and hasattr(child_node, "end_lineno"):
-                                    children.append(child_node)
-                                    comments_inside_child_node = self.comments_in_lines_range(comment_nodes_set, child_node.lineno, child_node.end_lineno)
-                                    comments_inside_children = comments_inside_children.union(comments_inside_child_node)
+                                if isinstance(child_node, ast.AST) and not isinstance(child_node, Comment):
+                                    self.append_child_with_inner_comment(node, comment_nodes_set, child_node, children, comments_inside_children)                                    
+
                 block_ranges.sort(key=lambda b: b.lineno)
                 node_comments = comments_inside_node - comments_inside_children
                 for node_comment in node_comments:
                     if node_comment.inline:
+                        # process inline or control expression oneline comment
                         if len(children) > 0:
                             inf_child = self.get_inf_node_for_comment(children, node_comment)
                             if inf_child is not None:
@@ -138,18 +141,22 @@ class ASTEnrichmentWithComments:
                             comment_nodes_set.remove(node_comment)
                             continue
                     else:
+                        # add online comment intp appropriate block
                         if len(block_ranges) > 0:
-                            block = self.get_block_around_comment(block_ranges, node_comment)
+                            block_or_inside_child = self.get_block_around_comment(block_ranges, node_comment)
+                            if block_or_inside_child == False:
+                                continue
+                            block = block_or_inside_child
                             if block is None:
                                 inf_block = self.get_inf_block_for_comment(block_ranges, node_comment)
                                 sup_block = self.get_sup_block_for_comment(block_ranges, node_comment)
                                 block = None
                                 if inf_block is not None and sup_block is not None:
-                                    for i, line in enumerate(self.lines[inf_block.end_lineno + 1:sup_block.lineno]):
+                                    for line_number in range(sup_block.lineno, inf_block.end_lineno, -1):
+                                        line = self.lines[line_number]
                                         if not self.is_comment_line(line):
                                             for keyword in ASTEnrichmentWithComments._KEYWORDS:
-                                                if keyword in line:
-                                                    line_number = inf_block.end_lineno + 1 + i
+                                                if keyword in line: # TODO: check more strong node type
                                                     block = inf_block if node_comment.lineno < line_number else sup_block
                                                     break
                                         if block is not None:
@@ -167,6 +174,14 @@ class ASTEnrichmentWithComments:
             self.add_comment_to_block(body, comment_node)
 
 
+    def append_child_with_inner_comment(self, node, comment_nodes_set, child_node, children, comments_inside_children: set):
+        if hasattr(child_node, "lineno") and hasattr(child_node, "end_lineno"):
+            child_comment_last_line = min(child_node.end_lineno, node.end_lineno - 1)
+            if child_comment_last_line >= child_node.lineno:
+                children.append(child_node)
+                comments_inside_child_node = self.comments_in_lines_range(comment_nodes_set, child_node.lineno, child_comment_last_line)
+                comments_inside_children.update(comments_inside_child_node)        
+
     def get_inf_node_for_comment(self, nodes: list[ast.AST], node_comment: Comment):
         inf_node = None
         for node in nodes:
@@ -177,6 +192,9 @@ class ASTEnrichmentWithComments:
     def get_block_around_comment(self, blocks: list[BlockWithRange], node_comment: Comment):
         for block in blocks:
             if block.lineno <= node_comment.lineno and node_comment.end_lineno <= block.end_lineno:
+                for block_node in block.block:
+                    if block_node.lineno <= node_comment.lineno and node_comment.end_lineno <= block_node.end_lineno:
+                        return False
                 return block
         return None
 
@@ -196,9 +214,6 @@ class ASTEnrichmentWithComments:
 
     def comments_in_lines_range(self, comment_nodes: list[Comment], low: int, high: int):
         return set([comment_node for comment_node in comment_nodes if low <= comment_node.lineno <= high])
-
-    def comments_in_range(self, comment_nodes: list[Comment], low: int, high: int):
-        return set([comment_node for comment_node in comment_nodes if low <= comment_node.lineno < high])
 
     def get_block_range(self, block: list[ast.AST]):
         linenos, end_linenos = [], []
