@@ -65,7 +65,7 @@ class ASTEnrichmentWithComments:
             end_lineno, end_col_offset = t.end
             c = Comment(
                 value=t.string,
-                inline=t.string != t.line.strip("\n").lstrip(" "),
+                inline=t.string.strip() != t.line.strip(),
                 lineno=lineno,
                 col_offset=col_offset,
                 end_lineno=end_lineno,
@@ -108,12 +108,15 @@ class ASTEnrichmentWithComments:
                         # child on any line expect the node's last one can have comment inside
                         if isinstance(attr, ast.AST) and not isinstance(attr, Comment):
                             child_node = attr
-                            self.append_child_with_inner_comment(node, comment_nodes_set, child_node, children, comments_inside_children)
+                            comments_inside_child_node = self.child_with_inner_comment(node, comment_nodes_set, child_node, children)
+                            comments_inside_children.update(comments_inside_child_node)
+
                         elif isinstance(attr, list):
                             children_nodes = attr
                             for child_node in children_nodes:
                                 if isinstance(child_node, ast.AST) and not isinstance(child_node, Comment):
-                                    self.append_child_with_inner_comment(node, comment_nodes_set, child_node, children, comments_inside_children)                                    
+                                    comments_inside_child_node = self.child_with_inner_comment(node, comment_nodes_set, child_node, children)
+                                    comments_inside_children.update(comments_inside_child_node)
 
                 block_ranges.sort(key=lambda b: b.lineno)
                 node_comments = comments_inside_node - comments_inside_children
@@ -128,6 +131,11 @@ class ASTEnrichmentWithComments:
                                 comment_nodes_set.remove(node_comment)
                                 continue
                         if len(block_ranges) > 0:
+                            if len([
+                                block for block in block_ranges \
+                                if block.lineno <= node_comment.lineno and node_comment.end_lineno <= block.end_lineno
+                            ]) > 0:
+                                continue
                             # comment after "if", "else", "try", "finally" and etc. Add it as not inline before the first block
                             sup_block = self.get_sup_block_for_comment(block_ranges, node_comment)
                             if sup_block is not None:
@@ -141,7 +149,7 @@ class ASTEnrichmentWithComments:
                             comment_nodes_set.remove(node_comment)
                             continue
                     else:
-                        # add online comment intp appropriate block
+                        # add online comment into appropriate block
                         if len(block_ranges) > 0:
                             block_or_inside_child = self.get_block_around_comment(block_ranges, node_comment)
                             if block_or_inside_child == False:
@@ -174,13 +182,14 @@ class ASTEnrichmentWithComments:
             self.add_comment_to_block(body, comment_node)
 
 
-    def append_child_with_inner_comment(self, node, comment_nodes_set, child_node, children, comments_inside_children: set):
+    def child_with_inner_comment(self, node, comment_nodes_set, child_node, children):
         if hasattr(child_node, "lineno") and hasattr(child_node, "end_lineno"):
             child_comment_last_line = min(child_node.end_lineno, node.end_lineno - 1)
             if child_comment_last_line >= child_node.lineno:
                 children.append(child_node)
                 comments_inside_child_node = self.comments_in_lines_range(comment_nodes_set, child_node.lineno, child_comment_last_line)
-                comments_inside_children.update(comments_inside_child_node)        
+                return comments_inside_child_node
+        return set()
 
     def get_inf_node_for_comment(self, nodes: list[ast.AST], node_comment: Comment):
         inf_node = None
@@ -252,4 +261,3 @@ def pre_compile_fixer(tree: ast.AST) -> ast.AST:
             return None
 
     return RewriteComments().visit(tree)
-
