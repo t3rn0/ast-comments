@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ast-comments"
-version = "1.2.2"
+version = "1.2.3"
 description = ""
 license = "MIT"
 readme = "README.md"
