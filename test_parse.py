@@ -2,6 +2,7 @@
 
 import ast
 import dis
+import sys
 from textwrap import dedent
 
 import pytest
@@ -230,6 +231,10 @@ def test_comment_to_class():
     assert isinstance(class_body[3], ast.FunctionDef)
 
 
+@pytest.mark.xfail(
+    sys.version_info >= (3, 14),
+    reason="https://github.com/t3rn0/ast-comments/issues/31",
+)
 def test_parse_again():
     """We can parse AstNode objects."""
     source = """hello = 'hello' # comment to hello"""

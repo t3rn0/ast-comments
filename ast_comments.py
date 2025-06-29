@@ -226,8 +226,12 @@ def _get_interval(items: _t.List[ast.AST]) -> _t.Tuple[int, int]:
 
 # `unparse` has been introduced in Python 3.9
 if sys.version_info >= (3, 9):
+    if sys.version_info < (3, 14):
+        from ast import _Unparser as _AstUnparser
+    else:
+        from _ast_unparse import Unparser as _AstUnparser
 
-    class _Unparser(ast._Unparser):
+    class _Unparser(_AstUnparser):
         def visit_Comment(self, node: Comment) -> None:
             if node.inline:
                 self.write(f"  {node.value}")
