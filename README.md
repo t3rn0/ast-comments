@@ -1,7 +1,7 @@
 # ast-comments
 
-An extension to the built-in `ast` module. 
-Finds comments in source code and adds them to the parsed tree.
+A Python extension to the built-in `ast` module that preserves comments in the Abstract Syntax Tree.
+This library finds comments in source code and includes them as nodes in the parsed AST.
 
 ## Installation
 ```
@@ -10,13 +10,13 @@ pip install ast-comments
 
 ## Usage
 
-There is no difference in usage between `ast` and `ast-comments`
+Usage is identical to the standard `ast` module:
 ```
 >>> from ast_comments import *
 >>> tree = parse("hello = 'hello' # comment to hello")
 ```
-Parsed tree is an instance of the original `ast.Module` object.
-The only difference is that there is a new type of tree node: `Comment`
+The parsed tree is an instance of the original `ast.Module` object.
+The only difference is that there is a new type of tree node: `Comment`.
 ```
 >>> tree
 <_ast.Module object at 0x7ffba52322e0>
@@ -27,15 +27,14 @@ The only difference is that there is a new type of tree node: `Comment`
 >>> dump(tree)
 "Module(body=[Assign(targets=[Name(id='hello', ctx=Store())], value=Constant(value='hello')), Comment(value='# comment to hello', inline=True)], type_ignores=[])"
 ```
-If you have python3.9 or above it's also possible to unparse the tree object with its comments preserved.
+If you have Python 3.9 or above, you can also unparse the tree object with its comments preserved:
 ```
 >>> print(unparse(tree))
 hello = 'hello'  # comment to hello
 ```
-**Note**: Python `compile()` cannot be run on the tree output from parse. The included `pre_compile_fixer()` function can be used to fix the tree (stripping 
-comment nodes) if it will be necessary to compile the output.
+**Note**: Python's `compile()` function cannot be used directly on the parsed tree output. The included `pre_compile_fixer()` function can be used to prepare the tree for compilation by stripping comment nodes when needed.
 
-More examples can be found in test_parse.py and test_unparse.py.
+Additional examples can be found in the test files: `test_parse.py` and `test_unparse.py`.
 
 ## Contributing
-You are welcome to open an issue or create a pull request
+Contributions are welcome! Please feel free to open an issue or create a pull request.
