@@ -302,3 +302,21 @@ def test_inline_comment_stays_inline():
     )
     _test_unparse(source)
     assert source.strip("\n") == unparse(parse(source))
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="match requires Python 3.10+")
+def test_comments_to_match():
+    """Comments to match/case blocks."""
+    source = dedent(
+        """
+        match a:  # match comment
+            case 'a_foo':  # case foo comment
+                foo()  # foo comment
+            case 'a_bar':  # case bar comment
+                bar()  # bar comment
+            case _:  # case default comment
+                default()  # default comment
+        """
+    )
+    _test_unparse(source)
+    assert source.strip("\n") == unparse(parse(source))

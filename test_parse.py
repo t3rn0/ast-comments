@@ -419,3 +419,44 @@ def test_comment_in_multilined_list():
         """
     )
     assert len(parse(source).body) == 1
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="match requires Python 3.10+")
+def test_comments_to_match():
+    """Comments to match/case blocks."""
+    source = dedent(
+        """
+        match a:  # match comment
+            case 'a_foo':  # case foo comment
+                foo()  # foo comment
+            case 'a_bar':  # case bar comment
+                bar()  # bar comment
+            case _:  # case default comment
+                default()  # default comment
+        """
+    )
+    nodes = parse(source).body
+    assert len(nodes) == 1  # MATCH node
+    cases = nodes[0].cases
+    assert len(cases) == 4  # match comment + 3 match_cases
+    assert isinstance(cases[0], Comment)
+    assert cases[0].value == "# match comment"
+
+    case0_body = cases[1].body
+    assert len(case0_body) == 3
+    assert isinstance(case0_body[0], Comment)
+    assert case0_body[0].value == "# case foo comment"
+    assert isinstance(case0_body[1], ast.Expr)
+    assert isinstance(case0_body[2], Comment)
+
+    case1_body = cases[2].body
+    assert len(case1_body) == 3
+    assert isinstance(case1_body[0], Comment)
+    assert isinstance(case1_body[1], ast.Expr)
+    assert isinstance(case1_body[2], Comment)
+
+    case2_body = cases[3].body
+    assert len(case2_body) == 3
+    assert isinstance(case2_body[0], Comment)
+    assert isinstance(case2_body[1], ast.Expr)
+    assert isinstance(case2_body[2], Comment)
