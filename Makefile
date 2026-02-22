@@ -1,4 +1,3 @@
-PYTHON_VERSION = $(shell python -c "import sys;print('{v[0]}.{v[1]}'.format(v=sys.version_info[:2]))")
 TEST_CODE = test_parse.py test_unparse.py
 CODE = ast_comments.py
 ALL_CODE = $(CODE) $(TEST_CODE)
@@ -19,11 +18,7 @@ lint:	## lint code
 
 .PHONY: test
 test:	## test code
-	@if [[ $(PYTHON_VERSION) = 3.8 ]]; then \
-		pytest test_parse.py; \
-	else \
-		pytest $(TEST_CODE); \
-	fi
+	pytest $(TEST_CODE)
 
 .PHONY: check
 check: lint test	## check

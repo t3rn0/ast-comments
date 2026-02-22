@@ -8,9 +8,13 @@ ast.unparse(ast_obj)
 Same source samples as in test_parse.py are used.
 """
 
+import sys
 from textwrap import dedent
 
 import pytest
+
+if sys.version_info < (3, 9):
+    pytest.skip("unparse requires Python 3.9+", allow_module_level=True)
 
 from ast_comments import dump, parse, unparse
 
