@@ -88,6 +88,8 @@ def _place_comment(
         target_node = target_interval["node"]
         sub_intervals = target_interval["intervals"]
 
+        # Falls back to the last sub-interval (loc=-1) when the comment line
+        # is beyond all sub-intervals.
         loc = -1
         for i, (low, high, _) in enumerate(sub_intervals):
             if low <= c_lineno <= high or c_lineno < low:
@@ -126,6 +128,7 @@ def _place_comment(
 
 
 def _build_tree_intervals(node: ast.AST, source: str) -> _TreeIntervals:
+    """NOTE: mutates lineno, end_lineno, end_col_offset on nodes that have them."""
     res = {}
     for node in ast.walk(node):
         attr_intervals = []
@@ -146,18 +149,19 @@ def _build_tree_intervals(node: ast.AST, source: str) -> _TreeIntervals:
                 # also update the end col offset corresponding to the new line
                 node.end_col_offset = len(source.split("\n")[high - 1])
             else:
-                child_linenos = [
-                    child.lineno
-                    for child in ast.iter_child_nodes(node)
-                    if hasattr(child, "lineno")
-                ]
-                child_end_linenos = [
-                    child.end_lineno
-                    for child in ast.iter_child_nodes(node)
-                    if hasattr(child, "end_lineno")
-                ]
-                low = min([min(attr_intervals)[0]] + child_linenos)
-                high = max([max(attr_intervals)[1]] + child_end_linenos)
+                candidates_low = [min(attr_intervals)[0]]
+                candidates_high = [max(attr_intervals)[1]]
+                if hasattr(node, "lineno"):
+                    candidates_low.append(node.lineno)
+                if hasattr(node, "end_lineno"):
+                    candidates_high.append(node.end_lineno)
+                for child in ast.iter_child_nodes(node):
+                    if hasattr(child, "lineno"):
+                        candidates_low.append(child.lineno)
+                    if hasattr(child, "end_lineno"):
+                        candidates_high.append(child.end_lineno)
+                low = min(candidates_low)
+                high = max(candidates_high)
 
             res[(low, high)] = {"intervals": attr_intervals, "node": node}
     return res
@@ -222,7 +226,7 @@ def _get_first_line_not_comment(lines: _t.List[str]):
 
 
 def _get_indentation_lvl(line: str) -> int:
-    line = line.replace("\t", "   ")
+    line = line.replace("\t", "    ")
     res = re.findall(r"^ *", line)
     indentation = 0
     if len(res) > 0:
@@ -238,7 +242,9 @@ def _get_end_lineno(node: ast.AST) -> int:
         for child in ast.iter_child_nodes(node)
         if hasattr(child, "end_lineno")
     ]
-    return max(end_linenos) if end_linenos else 0
+    if not end_linenos:
+        raise ValueError(f"Cannot determine end_lineno for {type(node).__name__}")
+    return max(end_linenos)
 
 
 def _get_interval(items: _t.List[ast.AST]) -> _t.Tuple[int, int]:
