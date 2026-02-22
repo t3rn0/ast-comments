@@ -67,7 +67,7 @@ def _enrich(source: _t.Union[str, bytes], tree: ast.AST) -> None:
     if not comment_nodes:
         return
 
-    tree_intervals = _get_tree_intervals_and_update_ast_nodes(tree, source)
+    tree_intervals = _build_tree_intervals(tree, source)
     for c_node in comment_nodes:
         _place_comment(c_node, tree, tree_intervals)
 
@@ -125,9 +125,7 @@ def _place_comment(
             right.inline = False
 
 
-def _get_tree_intervals_and_update_ast_nodes(
-    node: ast.AST, source: str
-) -> _TreeIntervals:
+def _build_tree_intervals(node: ast.AST, source: str) -> _TreeIntervals:
     res = {}
     for node in ast.walk(node):
         attr_intervals = []
