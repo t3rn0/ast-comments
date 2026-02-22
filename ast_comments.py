@@ -27,7 +27,7 @@ class Comment(ast.AST):
     )
 
 
-_CONTAINER_ATTRS = ["body", "handlers", "orelse", "finalbody"]
+_CONTAINER_ATTRS = ["body", "handlers", "orelse", "finalbody", "cases"]
 
 
 def parse(source: _t.Union[str, bytes, ast.AST], *args, **kwargs) -> ast.AST:
@@ -101,7 +101,7 @@ def _place_comment(
 
     attr = getattr(target_node, target_attr)
     attr.append(comment)
-    attr.sort(key=lambda x: (x.end_lineno, isinstance(x, Comment)))
+    attr.sort(key=lambda x: (_get_end_lineno(x), isinstance(x, Comment)))
 
     # NOTE:
     # Due to some issues it's possible for comment nodes to go outside of their initial place
@@ -146,16 +146,18 @@ def _build_tree_intervals(node: ast.AST, source: str) -> _TreeIntervals:
                 # also update the end col offset corresponding to the new line
                 node.end_col_offset = len(source.split("\n")[high - 1])
             else:
-                low = (
-                    min(node.lineno, min(attr_intervals)[0])
-                    if hasattr(node, "lineno")
-                    else min(attr_intervals)[0]
-                )
-                high = (
-                    max(node.end_lineno, max(attr_intervals)[1])
-                    if hasattr(node, "end_lineno")
-                    else max(attr_intervals)[1]
-                )
+                child_linenos = [
+                    child.lineno
+                    for child in ast.iter_child_nodes(node)
+                    if hasattr(child, "lineno")
+                ]
+                child_end_linenos = [
+                    child.end_lineno
+                    for child in ast.iter_child_nodes(node)
+                    if hasattr(child, "end_lineno")
+                ]
+                low = min([min(attr_intervals)[0]] + child_linenos)
+                high = max([max(attr_intervals)[1]] + child_end_linenos)
 
             res[(low, high)] = {"intervals": attr_intervals, "node": node}
     return res
@@ -228,12 +230,30 @@ def _get_indentation_lvl(line: str) -> int:
     return indentation
 
 
-# get min and max line from a source tree
+def _get_end_lineno(node: ast.AST) -> int:
+    if hasattr(node, "end_lineno"):
+        return node.end_lineno
+    end_linenos = [
+        child.end_lineno
+        for child in ast.iter_child_nodes(node)
+        if hasattr(child, "end_lineno")
+    ]
+    return max(end_linenos) if end_linenos else 0
+
+
 def _get_interval(items: _t.List[ast.AST]) -> _t.Tuple[int, int]:
     linenos, end_linenos = [], []
     for item in items:
-        linenos.append(item.lineno)
-        end_linenos.append(item.end_lineno)
+        if hasattr(item, "lineno"):
+            linenos.append(item.lineno)
+        if hasattr(item, "end_lineno"):
+            end_linenos.append(item.end_lineno)
+        if not hasattr(item, "lineno") or not hasattr(item, "end_lineno"):
+            for child in ast.iter_child_nodes(item):
+                if hasattr(child, "lineno"):
+                    linenos.append(child.lineno)
+                if hasattr(child, "end_lineno"):
+                    end_linenos.append(child.end_lineno)
     return min(linenos), max(end_linenos)
 
 
