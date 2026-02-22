@@ -207,7 +207,7 @@ def _get_first_line_not_comment(lines: _t.List[str]):
 
 
 def _get_indentation_lvl(line: str) -> int:
-    line.replace("\t", "   ")
+    line = line.replace("\t", "   ")
     res = re.findall(r"^ *", line)
     indentation = 0
     if len(res) > 0:
