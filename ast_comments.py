@@ -7,6 +7,14 @@ from ast import *  # noqa: F401,F403
 from collections.abc import Iterable
 
 
+class _NodeIntervalInfo(_t.TypedDict):
+    intervals: _t.List[_t.Tuple[int, int, str]]
+    node: ast.AST
+
+
+_TreeIntervals = _t.Dict[_t.Tuple[int, int], _NodeIntervalInfo]
+
+
 class Comment(ast.AST):
     if sys.version_info >= (3, 10):
         __match_args__ = ("value", "inline")
@@ -67,9 +75,7 @@ def _enrich(source: _t.Union[str, bytes], tree: ast.AST) -> None:
 def _place_comment(
     comment: Comment,
     tree: ast.AST,
-    tree_intervals: _t.Dict[
-        _t.Tuple[int, int], _t.Dict[str, _t.Union[_t.List[_t.Tuple[int, int]], ast.AST]]
-    ],
+    tree_intervals: _TreeIntervals,
 ) -> None:
     c_lineno = comment.lineno
     possible_intervals = [(x, y) for x, y in tree_intervals if x <= c_lineno <= y]
@@ -121,9 +127,7 @@ def _place_comment(
 
 def _get_tree_intervals_and_update_ast_nodes(
     node: ast.AST, source: str
-) -> _t.Dict[
-    _t.Tuple[int, int], _t.Dict[str, _t.Union[_t.List[_t.Tuple[int, int]], ast.AST]]
-]:
+) -> _TreeIntervals:
     res = {}
     for node in ast.walk(node):
         attr_intervals = []
