@@ -159,26 +159,18 @@ def _get_tree_intervals_and_update_ast_nodes(
     return res
 
 
-# Try to move lower bound lower and upper bound higher while not going out of bounds concerning
-# the current block. The method is based on indentation levels to find the correct upper and lower
-# bounds of the interval looked at by checking where the indentation changes, and it marks the end
-# of the interval
 def _extend_interval(interval: _t.Tuple[int, int], code: str) -> _t.Tuple[int, int]:
+    """Expand interval bounds to capture surrounding lines at the same (or deeper) indentation."""
     lines = code.split("\n")
-    # Insert an empty line to correspond to the lineno values from ast nodes which start at 1
-    # instead of 0
+    # 1-indexed to match ast lineno
     lines.insert(0, "")
 
-    low = interval[0]
-    high = interval[1]
+    low, high = interval
     skip_lower = False
 
     if low == high:
-        # Covering inner blocks like the inside of an if block consisting of only one line
         start_indentation = _get_indentation_lvl(lines[low])
     else:
-        # Covering cases of blocks starting at an outer term like 'if' and blocks with more than
-        # one line
         lower_bound = _get_indentation_lvl(lines[low])
         start_indentation = max(
             lower_bound,
@@ -187,24 +179,31 @@ def _extend_interval(interval: _t.Tuple[int, int], code: str) -> _t.Tuple[int, i
         if start_indentation != lower_bound:
             skip_lower = True
 
-    while not skip_lower and low - 1 > 0:
-        # The upper bound ignores comments which are not correctly aligned, due to the fact
-        # that there must always be an ast node other than a comment one with a lower indentation
-        # above
-        if re.match(
-            r"^ *#.*", lines[low - 1]
-        ) or start_indentation <= _get_indentation_lvl(lines[low - 1]):
+    if not skip_lower:
+        low = _extend_lower(low, lines, start_indentation)
+    high = _extend_upper(high, lines, start_indentation)
+
+    return low, high
+
+
+def _extend_lower(low: int, lines: _t.List[str], indentation: int) -> int:
+    while low - 1 > 0:
+        if re.match(r"^ *#.*", lines[low - 1]) or indentation <= _get_indentation_lvl(
+            lines[low - 1]
+        ):
             low -= 1
         else:
             break
+    return low
 
+
+def _extend_upper(high: int, lines: _t.List[str], indentation: int) -> int:
     while high + 1 < len(lines):
-        if start_indentation <= _get_indentation_lvl(lines[high + 1]):
+        if indentation <= _get_indentation_lvl(lines[high + 1]):
             high += 1
         else:
             break
-
-    return low, high
+    return high
 
 
 # Searches for the first line not being a comment
