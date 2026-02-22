@@ -29,9 +29,7 @@ def parse(source: _t.Union[str, bytes, ast.AST], *args, **kwargs) -> ast.AST:
     return tree
 
 
-def _enrich(source: _t.Union[str, bytes], tree: ast.AST) -> None:
-    if isinstance(source, bytes):
-        source = source.decode()
+def _extract_comments(source: str) -> _t.List[Comment]:
     lines_iter = iter(source.splitlines(keepends=True))
     tokens = tokenize.generate_tokens(lambda: next(lines_iter))
 
@@ -50,7 +48,14 @@ def _enrich(source: _t.Union[str, bytes], tree: ast.AST) -> None:
             end_col_offset=end_col_offset,
         )
         comment_nodes.append(c)
+    return comment_nodes
 
+
+def _enrich(source: _t.Union[str, bytes], tree: ast.AST) -> None:
+    if isinstance(source, bytes):
+        source = source.decode()
+
+    comment_nodes = _extract_comments(source)
     if not comment_nodes:
         return
 
