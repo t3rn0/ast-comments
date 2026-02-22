@@ -61,55 +61,62 @@ def _enrich(source: _t.Union[str, bytes], tree: ast.AST) -> None:
 
     tree_intervals = _get_tree_intervals_and_update_ast_nodes(tree, source)
     for c_node in comment_nodes:
-        c_lineno = c_node.lineno
-        possible_intervals_for_c_node = [
-            (x, y) for x, y in tree_intervals if x <= c_lineno <= y
+        _place_comment(c_node, tree, tree_intervals)
+
+
+def _place_comment(
+    comment: Comment,
+    tree: ast.AST,
+    tree_intervals: _t.Dict[
+        _t.Tuple[int, int], _t.Dict[str, _t.Union[_t.List[_t.Tuple[int, int]], ast.AST]]
+    ],
+) -> None:
+    c_lineno = comment.lineno
+    possible_intervals = [(x, y) for x, y in tree_intervals if x <= c_lineno <= y]
+
+    if possible_intervals:
+        target_interval = tree_intervals[
+            max(possible_intervals, key=lambda item: (item[0], -item[1]))
         ]
 
-        if possible_intervals_for_c_node:
-            target_interval = tree_intervals[
-                max(possible_intervals_for_c_node, key=lambda item: (item[0], -item[1]))
-            ]
+        target_node = target_interval["node"]
+        sub_intervals = target_interval["intervals"]
 
-            target_node = target_interval["node"]
-            # intervals for every attribute from _CONTAINER_ATTRS for the target node
-            sub_intervals = target_interval["intervals"]
+        loc = -1
+        for i, (low, high, _) in enumerate(sub_intervals):
+            if low <= c_lineno <= high or c_lineno < low:
+                loc = i
+                break
 
-            loc = -1
-            for i, (low, high, _) in enumerate(sub_intervals):
-                if low <= c_lineno <= high or c_lineno < low:
-                    loc = i
-                    break
+        *_, target_attr = sub_intervals[loc]
+    else:
+        target_node = tree
+        target_attr = "body"
 
-            *_, target_attr = sub_intervals[loc]
-        else:
-            target_node = tree
-            target_attr = "body"
+    attr = getattr(target_node, target_attr)
+    attr.append(comment)
+    attr.sort(key=lambda x: (x.end_lineno, isinstance(x, Comment)))
 
-        attr = getattr(target_node, target_attr)
-        attr.append(c_node)
-        attr.sort(key=lambda x: (x.end_lineno, isinstance(x, Comment)))
-
-        # NOTE:
-        # Due to some issues it's possible for comment nodes to go outside of their initial place
-        # after the parse-unparse roundtip:
-        #   before parse/unparse:
-        #   ```
-        #   # comment 0
-        #   some_code  # comment 1
-        #   ```
-        #   after parse/unparse:
-        #   ```
-        #   # comment 0  # comment 1
-        #   some_code
-        #   ```
-        # As temporary workaround I decided to correct inline attributes here so they don't
-        # overlap with each other. This place should be revisited after solving following issues:
-        # - https://github.com/t3rn0/ast-comments/issues/10
-        # - https://github.com/t3rn0/ast-comments/issues/13
-        for left, right in zip(attr[:-1], attr[1:]):
-            if isinstance(left, Comment) and isinstance(right, Comment):
-                right.inline = False
+    # NOTE:
+    # Due to some issues it's possible for comment nodes to go outside of their initial place
+    # after the parse-unparse roundtip:
+    #   before parse/unparse:
+    #   ```
+    #   # comment 0
+    #   some_code  # comment 1
+    #   ```
+    #   after parse/unparse:
+    #   ```
+    #   # comment 0  # comment 1
+    #   some_code
+    #   ```
+    # As temporary workaround I decided to correct inline attributes here so they don't
+    # overlap with each other. This place should be revisited after solving following issues:
+    # - https://github.com/t3rn0/ast-comments/issues/10
+    # - https://github.com/t3rn0/ast-comments/issues/13
+    for left, right in zip(attr[:-1], attr[1:]):
+        if isinstance(left, Comment) and isinstance(right, Comment):
+            right.inline = False
 
 
 def _get_tree_intervals_and_update_ast_nodes(
